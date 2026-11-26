@@ -39,16 +39,16 @@ const FONT = '"Helvetica Neue", Helvetica, Arial, sans-serif';
 const RED = '#e8312f', PINK = '#e6007e', YOU = '#0b7a75', GRAY = '#555';
 
 // ---------- Road: vertical S-curve built from circular arcs, car drives bottom → top ----------
-// Arcs: right α, LEFT 2α (bulge to the right, like the original slide), right 2α, left α.
-const X0 = 760, R_TURN = 100, ALPHA = 65 * Math.PI / 180, Y_CURVE0 = 690, ROAD_W = 92;
+// Arcs: LEFT α then RIGHT α (a big lane change), so your straight inertial path never meets the road again.
+const X0 = 720, R_TURN = 150, ALPHA = 60 * Math.PI / 180, Y_CURVE0 = 575, ROAD_W = 92;
 const pts = [];
 let ARC = [];                                   // arc-length boundaries of the 4 bends
 {
   const ds = 0.5, k = 1 / R_TURN, a = ALPHA / k;
-  const lens = [a, 2 * a, 2 * a, a], sgn = [1, -1, 1, -1];      // +1 = right turn
+  const lens = [a, a], sgn = [-1, 1];                            // +1 = right turn
   const sStraight = (SH + 60) - Y_CURVE0;
   ARC = [sStraight]; lens.forEach(L => ARC.push(ARC[ARC.length - 1] + L));
-  const kappaRaw = s => { for (let i = 0; i < 4; i++) if (s >= ARC[i] && s < ARC[i + 1]) return sgn[i] * k; return 0; };
+  const kappaRaw = s => { for (let i = 0; i < lens.length; i++) if (s >= ARC[i] && s < ARC[i + 1]) return sgn[i] * k; return 0; };
   const RAMP = 30;                               // smooth the curvature jumps a little
   const kappa = s => { let t = 0; for (let j = -4; j <= 4; j++) t += kappaRaw(s + j * RAMP / 8); return t / 9; };
   // start offset so the whole curve is centered on X0
@@ -77,7 +77,7 @@ function sAtY(y) {
   return pts[best].s;
 }
 const S_START = sAtY(SH - 70);
-const S_APEX  = (ARC[1] + ARC[2]) / 2;                 // middle of the first LEFT turn (as in the original slide)
+const S_APEX  = (ARC[0] + ARC[1]) / 2;                 // middle of the first LEFT turn (as in the original slide)
 const S_END   = sAtY(95);
 const V = 165;                                          // px per second
 
@@ -176,6 +176,32 @@ function drawYou(x, y) {
   g.restore();
 }
 
+// plain dashed line (no arrowhead, so it isn't mistaken for a force)
+function pathLine(x1, y1, x2, y2, alpha) {
+  g.save(); g.globalAlpha = alpha == null ? 1 : alpha; g.setLineDash([12, 9]); g.lineCap = 'butt';
+  for (const [col, w] of [['#fff', 8], ['#666', 4]]) {      // white edge so it shows on the black road
+    g.strokeStyle = col; g.lineWidth = w;
+    g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
+  }
+  g.restore();
+}
+// tumbling stick figure centered at (x, y), rotated by ang
+function drawStick(x, y, ang) {
+  g.save(); g.translate(x, y); g.rotate(ang);
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  for (const [col, w] of [['#fff', 11], [YOU, 5]]) {        // white outline so it reads over the road
+    g.strokeStyle = col; g.lineWidth = w;
+    g.beginPath();
+    g.moveTo(0, -12); g.lineTo(0, 10);                       // body
+    g.moveTo(-15, -20); g.lineTo(0, -6); g.lineTo(15, -20);  // arms flung up
+    g.moveTo(-12, 28); g.lineTo(0, 10); g.lineTo(13, 26);    // legs
+    g.stroke();
+    g.beginPath(); g.arc(0, -21, 7.5, 0, 2 * Math.PI);
+    if (col === '#fff') g.stroke(); else { g.fillStyle = YOU; g.fill(); }
+  }
+  g.restore();
+}
+
 function draw() {
   const dpr = devicePixelRatio || 1;
   g.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
@@ -185,15 +211,20 @@ function draw() {
 
   if (build <= 1) {
     const sep = free ? Math.hypot(P.x - c.x, P.y - c.y) : 0;
-    const you = free ? P : {x: c.x, y: c.y + 4};
-    if (free && sep > 30) {                               // you keep going straight
-      arrow(P0.x, P0.y, P.x, P.y + 14, 'rgba(11,122,117,0.6)', 4, true);
-      arrow(P.x, P.y, P.x + (PV.x / V) * 90, P.y + (PV.y / V) * 90, RED, 6, true);
-      label('Your\ninertial path', P0.x - 22, Math.max(P.y + 60, 300), GRAY, 28, -1, 0);
+    const out = sep > 20;                                 // you've gone out the side of the car
+    if (free && sep > 6) {                                // the straight line you follow
+      pathLine(P0.x, P0.y, P0.x + (PV.x / V) * 2000, P0.y + (PV.y / V) * 2000);
+      label('Your\ninertial path', P0.x + 22, 300, GRAY, 28, 1, 0);
     }
     drawCar(c);
-    drawYou(you.x, you.y);
-    label('You', you.x + (sep > 30 ? 18 : 30), you.y, YOU, 30, 1, 0);
+    if (out) {
+      drawStick(P.x, P.y, (sep - 20) / 22);               // tumbling, but still moving in a straight line
+      label('You', P.x + 34, P.y, YOU, 30, 1, 0);
+    } else {
+      const you = free ? P : {x: c.x, y: c.y + 4};
+      drawYou(you.x, you.y);
+      label('You', you.x + 30, you.y, YOU, 30, 1, 0);
+    }
     return;
   }
 
@@ -204,8 +235,12 @@ function draw() {
 
   // your inertial path: straight ahead along the car's current velocity
   const fx = c.x + c.tx * 34, fy = c.y + c.ty * 34;
-  arrow(fx, fy, fx + c.tx * 150, fy + c.ty * 150, RED, 6, true);
-  label('Your\ninertial path', fx + c.tx * 150 + outside * 18, fy + c.ty * 150 + 10, GRAY, 28, outside, 0);
+  if (strength > 0.05) {                                // only while turning (on a straight road it IS the road)
+    pathLine(fx, fy, fx + c.tx * 160, fy + c.ty * 160, strength);
+    const ex = fx + c.tx * 160, ey = fy + c.ty * 160;
+    if (outside > 0) label('Your\ninertial path', ex + 18, ey + 10, GRAY, 28, 1, 0, strength);
+    else label('Your\ninertial path', Math.max(ex, 575), ey - 12, GRAY, 28, 0, -1, strength);   // above, clear of the bullet
+  }
 
   drawCar(c);
   drawYou(c.x, c.y + 4);
