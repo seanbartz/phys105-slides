@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Second Law — Same force, same change in velocity</title>
+<!--
+  Builds (clicker / → / PageDown / click = next,  ← / PageUp = back):
+    0  Both carts on air tracks: top at rest, bottom already moving with v₀
+    1  Same force for the same time on both → velocity arrows grow by the same Δv, then coast
+    2  Equations + "same force and mass" / "same acceleration and time" notes
+  Space = pause/resume,  R = replay current build
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #fff; overflow: hidden; }
+  body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #000; cursor: default; }
+  #stage { position: absolute; width: 1024px; height: 768px; transform-origin: 0 0; }
+  #cv { position: absolute; left: 0; top: 0; width: 1024px; height: 768px; }
+  .head { position: absolute; left: 60px; margin: 0; font-size: 30px; font-weight: 400; }
+  #eqs { position: absolute; left: 60px; top: 452px; display: grid; opacity: 0;
+         grid-template-columns: 150px auto auto auto auto auto auto; row-gap: 18px; align-items: baseline; justify-items: start;
+         font-family: "Cambria Math", "STIX Two Math", "Times New Roman", Times, serif; font-size: 40px; }
+  #eqs .lab { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 26px; color: #666; }
+  #eqs .r { justify-self: end; }
+  #eqs .eq { padding: 0 12px; }
+  #eqs .fma { margin-right: 70px; }
+  #eqs .at { margin-left: 8px; margin-right: 26px; }
+  #eqs .c { justify-self: center; }
+  #eqs i { font-style: italic; }
+  #eqs sub { font-size: 0.62em; vertical-align: -0.28em; line-height: 0; font-style: normal; }
+  #hint { position: fixed; right: 14px; bottom: 10px; font-size: 14px; color: #9ca3af; transition: opacity .6s; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv"></canvas>
+  <div class="head" style="top:20px">At rest before force applied</div>
+  <div class="head" style="top:250px">Moving before force applied</div>
+  <div id="eqs">
+    <span class="lab">At rest</span>
+    <span id="fa1" class="fma"><i>F</i>&#8202;&nbsp;=&nbsp;<i>ma</i></span>
+    <span class="r"><i>v</i><sub>1</sub></span><span class="c eq">=</span><span class="c">0</span>
+    <span id="at1" class="at">+&nbsp;<i>at</i></span><span></span>
+
+    <span class="lab">Moving</span>
+    <span id="fa2" class="fma"><i>F</i>&#8202;&nbsp;=&nbsp;<i>ma</i></span>
+    <span class="r"><i>v</i></span><span class="c eq">=</span><span class="c"><i>v</i><sub>0</sub></span>
+    <span id="at2" class="at">+&nbsp;<i>at</i></span><span>=&nbsp;<i>v</i><sub>0</sub>&nbsp;+&nbsp;<i>v</i><sub>1</sub></span>
+  </div>
+</div>
+<div id="hint">click / → next &nbsp;·&nbsp; ← back &nbsp;·&nbsp; space pause &nbsp;·&nbsp; R replay</div>
+
+<script>
+(() => {
+const SW = 1024, SH = 768;
+const FONT = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+const SERIF = '"Cambria Math", "STIX Two Math", "Times New Roman", Times, serif';
+const RED = '#e8312f', DARKRED = '#9b1c1c', GRAY = '#666';
+const PREV = 'newton-second-law.html', NEXT = 'newton-third-law.html', LAST_BUILD = 2;
+
+// ---------- Physics (px, s): identical force, mass → identical a; identical Δt → identical Δv ----------
+const A = 55, T_PUSH = 2.0, DV = A * T_PUSH;          // Δv = 110 px/s
+const V0 = 70;                                        // bottom cart's initial speed
+const T_PRE = 0.6, T_COAST = 1.6, T_BRACE = 0.6;
+const T_STOP = T_PRE + T_PUSH + T_COAST, T_END = T_STOP + T_BRACE;
+const KV = 0.9;                                       // velocity arrow px per (px/s)
+const CARTS = [
+  {oy: 0,   x0: 207, v0: 0},                          // top: at rest
+  {oy: 230, x0: 150, v0: V0},                         // bottom: moving
+];
+function pushTime(t) { return Math.min(T_PUSH, Math.max(0, Math.min(t, T_STOP) - T_PRE)); }
+function vel(c, t) { return c.v0 + A * pushTime(t); }
+function pos(c, t) {
+  const tm = Math.min(t, T_STOP), tp = pushTime(t);
+  const tAfter = Math.max(0, tm - T_PRE - T_PUSH);
+  return c.x0 + c.v0 * tm + 0.5 * A * tp * tp + DV * tAfter;
+}
+
+// ---------- State ----------
+let build = 0, t = 0, running = false, paused = false, eqA = 0;
+function enter(b) {
+  build = Math.max(0, Math.min(LAST_BUILD, b));
+  paused = false;
+  if (build === 0) { t = 0; running = false; eqA = 0; }
+  if (build === 1) { t = 0; running = true; eqA = 0; }
+  if (build === 2) { t = T_END; running = true; eqA = 0; }
+}
+function step(dt) {
+  if (!running || paused) return;
+  if (build === 1) { t = Math.min(T_END, t + dt); if (t >= T_END) running = false; }
+  if (build === 2) { eqA = Math.min(1, eqA + dt / 0.6); if (eqA >= 1) running = false; }
+}
+
+// ---------- Drawing ----------
+const cv = document.getElementById('cv'), g = cv.getContext('2d');
+const stage = document.getElementById('stage'), eqs = document.getElementById('eqs');
+let scale = 1;
+function layout() {
+  const W = innerWidth, H = innerHeight;
+  scale = Math.min(W / SW, H / SH);
+  stage.style.transform = `scale(${scale})`;
+  stage.style.left = (W - SW * scale) / 2 + 'px';
+  stage.style.top = (H - SH * scale) / 2 + 'px';
+  const dpr = devicePixelRatio || 1;
+  cv.width = Math.round(SW * scale * dpr); cv.height = Math.round(SH * scale * dpr);
+}
+function arrow(x1, y1, x2, y2, color, lw, dashed) {
+  const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy);
+  if (L < 6) return;
+  const ux = dx / L, uy = dy / L, h = Math.max(10, lw * 3.2);
+  g.save(); g.strokeStyle = g.fillStyle = color; g.lineWidth = lw; g.lineCap = 'butt';
+  if (dashed) g.setLineDash([lw * 2.2, lw * 1.6]);
+  g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2 - ux * h * 0.9, y2 - uy * h * 0.9); g.stroke();
+  g.setLineDash([]);
+  g.beginPath(); g.moveTo(x2, y2);
+  g.lineTo(x2 - ux * h - uy * h * 0.6, y2 - uy * h + ux * h * 0.6);
+  g.lineTo(x2 - ux * h + uy * h * 0.6, y2 - uy * h - ux * h * 0.6);
+  g.closePath(); g.fill(); g.restore();
+}
+// text block; (x,y) = anchor, ax/ay in {-1,0,1}: which side of the anchor the text sits on
+function label(text, x, y, color, size, ax, ay, alpha, font) {
+  g.save(); g.globalAlpha = alpha == null ? 1 : alpha;
+  g.font = font || `${size}px ${FONT}`; g.fillStyle = color; g.textBaseline = 'middle';
+  const lines = text.split('\n'), lh = size * 1.15;
+  const w = Math.max(...lines.map(l => g.measureText(l).width)), h = lines.length * lh;
+  let cx = x + ax * w / 2, cy = y + ay * h / 2;
+  cx = Math.min(SW - 10 - w / 2, Math.max(10 + w / 2, cx));
+  g.textAlign = 'left'; g.lineJoin = 'round'; g.strokeStyle = '#fff'; g.lineWidth = 7;
+  lines.forEach((l, i) => g.strokeText(l, cx - w / 2, cy - h / 2 + lh * (i + 0.5)));
+  lines.forEach((l, i) => g.fillText(l, cx - w / 2, cy - h / 2 + lh * (i + 0.5)));
+  g.restore();
+  return {cx, cy, w, h};
+}
+// italic serif symbol with a subscript, e.g. ('v', '0')
+function sym(base, sub, x, y, color, size, alpha) {
+  g.save(); g.globalAlpha = alpha == null ? 1 : alpha;
+  g.textBaseline = 'middle'; g.lineJoin = 'round'; g.strokeStyle = '#fff'; g.lineWidth = 6; g.fillStyle = color;
+  g.font = `italic ${size}px ${SERIF}`;
+  const wb = g.measureText(base).width;
+  g.strokeText(base, x, y); g.fillText(base, x, y);
+  let w = wb;
+  if (sub) {
+    g.font = `${Math.round(size * 0.62)}px ${SERIF}`;
+    g.strokeText(sub, x + wb + 1, y + size * 0.28); g.fillText(sub, x + wb + 1, y + size * 0.28);
+    w += 1 + g.measureText(sub).width;
+  }
+  g.restore();
+  return w;
+}
+// sequence of symbols / plain text pieces drawn left to right
+function expr(parts, x, y, color, size, alpha) {
+  let cx = x;
+  for (const p of parts) {
+    if (typeof p === 'string') {
+      g.save(); g.globalAlpha = alpha == null ? 1 : alpha; g.font = `${size}px ${SERIF}`; g.textBaseline = 'middle';
+      g.lineJoin = 'round'; g.strokeStyle = '#fff'; g.lineWidth = 6; g.fillStyle = color;
+      g.strokeText(p, cx, y); g.fillText(p, cx, y); cx += g.measureText(p).width; g.restore();
+    } else cx += sym(p[0], p[1], cx, y, color, size, alpha);
+  }
+  return cx - x;
+}
+
+const TRACK_X0 = 40, TRACK_X1 = 984, CART_W = 130;
+function drawTrack(oy) {
+  const y = 152 + oy;
+  g.save();
+  g.fillStyle = '#d4d4d4'; g.fillRect(TRACK_X0, y, TRACK_X1 - TRACK_X0, 42);
+  g.fillStyle = '#e9e9e9'; g.fillRect(TRACK_X0, y + 22, TRACK_X1 - TRACK_X0, 20);
+  g.strokeStyle = '#444'; g.lineWidth = 1.5; g.strokeRect(TRACK_X0, y, TRACK_X1 - TRACK_X0, 42);
+  g.font = `24px ${SERIF}`; g.fillStyle = '#333'; g.textBaseline = 'middle'; g.textAlign = 'right';
+  g.fillText('air track', TRACK_X1 - 10, y + 26);
+  g.restore();
+}
+function drawCart(xc, oy) {
+  const x = xc - CART_W / 2;
+  g.save();
+  g.fillStyle = '#999'; g.strokeStyle = '#222'; g.lineWidth = 1.5;
+  g.fillRect(x, 138 + oy, CART_W, 34); g.strokeRect(x, 138 + oy, CART_W, 34);   // glider sitting on the track
+  g.fillStyle = '#333'; g.fillRect(x, 104 + oy, CART_W, 36); g.strokeRect(x, 104 + oy, CART_W, 36);
+  g.font = `bold 26px ${SERIF}`; g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('cart', xc, 123 + oy);
+  g.restore();
+}
+
+function draw() {
+  const dpr = devicePixelRatio || 1;
+  g.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+  g.clearRect(0, 0, SW, SH);
+  const pushing = build >= 1 && t >= T_PRE && t < T_PRE + T_PUSH;
+  const braceA = build >= 2 ? 1 : Math.max(0, Math.min(1, (t - T_STOP) / T_BRACE));
+
+  CARTS.forEach((c, i) => {
+    const oy = c.oy, x = pos(c, t), v = vel(c, t);
+    drawTrack(oy);
+    drawCart(x, oy);
+    const ay = 86 + oy;                                   // velocity arrow row
+    // velocity arrow: v0 part (dark red) + gained part (bright red)
+    if (c.v0 > 0) arrow(x, ay, x + c.v0 * KV, ay, v > c.v0 + 1 ? DARKRED : RED, 5);
+    if (v - c.v0 > 1) {
+      g.save(); g.strokeStyle = RED; g.lineWidth = 5;
+      if (c.v0 > 0) { g.beginPath(); g.moveTo(x + c.v0 * KV - 14, ay); g.lineTo(x + c.v0 * KV, ay); g.stroke(); }
+      g.restore();
+      arrow(x + c.v0 * KV - (c.v0 > 0 ? 14 : 0), ay, x + v * KV, ay, RED, 5);
+    }
+    // velocity label at the tip
+    const tip = x + v * KV + 10;
+    if (i === 0 && v > 1) expr([['v', '1']], tip, ay, RED, 34);
+    if (i === 1) {
+      if (v <= c.v0 + 1) expr([['v', '0']], tip, ay, RED, 34);
+      else expr([['v', '0'], ' + ', ['v', '1']], tip, ay, RED, 34);
+    }
+    // the push
+    if (pushing) {
+      const xl = x - CART_W / 2 - 6, fy = 122 + oy;
+      arrow(xl - 120, fy, xl, fy, '#000', 5);
+      label('force', xl - 60, fy - 30, '#000', 28, 0, 0, 1, `28px ${SERIF}`);
+    }
+    // Δv bracket over the part of the arrow gained during the push
+    if (braceA > 0) {
+      const x1 = x + c.v0 * KV, x2 = x + v * KV, by = ay - 18;
+      g.save(); g.globalAlpha = braceA; g.strokeStyle = '#000'; g.lineWidth = 2.5;
+      g.beginPath(); g.moveTo(x1, by + 8); g.lineTo(x1, by); g.lineTo(x2, by); g.lineTo(x2, by + 8); g.stroke();
+      g.restore();
+      g.save(); g.globalAlpha = braceA; g.font = `italic 30px ${SERIF}`;
+      const w = g.measureText('Δv').width; g.restore();
+      expr(['Δ', ['v', '']], (x1 + x2) / 2 - w / 2, by - 20, '#000', 30, braceA);
+    }
+  });
+
+  // build 2: equations, notes, pointer boxes
+  eqs.style.opacity = eqA;
+  if (eqA > 0) {
+    const st = stage.getBoundingClientRect();
+    const box = id => { const r = document.getElementById(id).getBoundingClientRect();
+      return {x: (r.left - st.left) / scale, y: (r.top - st.top) / scale, w: r.width / scale, h: r.height / scale}; };
+    const group = (a, b) => { const p = box(a), q = box(b);
+      const x = Math.min(p.x, q.x) - 10, y = p.y - 4, x2 = Math.max(p.x + p.w, q.x + q.w) + 10, y2 = q.y + q.h + 4;
+      return {x, y, w: x2 - x, h: y2 - y}; };
+    const b1 = group('fa1', 'fa2'), b2 = group('at1', 'at2');
+    g.save(); g.globalAlpha = eqA; g.strokeStyle = '#999'; g.lineWidth = 2; g.setLineDash([7, 6]);
+    for (const b of [b1, b2]) { g.beginPath(); g.roundRect(b.x, b.y, b.w, b.h, 10); g.stroke(); }
+    g.restore();
+    const n1 = label('Same force and mass,\nso same acceleration', 60, 700, GRAY, 26, 1, 0, eqA);
+    const n2 = label('Same acceleration and time, so\nchange in velocity is the same', 990, 700, GRAY, 26, -1, 0, eqA);
+    g.save(); g.globalAlpha = eqA; g.strokeStyle = GRAY; g.lineWidth = 2;
+    for (const [n, b] of [[n1, b1], [n2, b2]]) {
+      const ax = Math.min(Math.max(b.x + b.w / 2, n.cx - n.w / 2 + 20), n.cx + n.w / 2 - 20);
+      arrow(ax, n.cy - n.h / 2 - 4, b.x + b.w / 2, b.y + b.h + 4, GRAY, 2);
+    }
+    g.restore();
+  }
+}
+
+// ---------- Loop & input ----------
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  step(dt); draw();
+  requestAnimationFrame(loop);
+}
+function next() { if (build === LAST_BUILD) { if (NEXT) location.href = NEXT; } else enter(build + 1); }
+function back() { if (build === 0) location.href = PREV + '#build=last'; else enter(build - 1); }
+// touch: swipe left = next, swipe right = back (tap = next via click)
+let tX0 = null, tY0 = null;
+addEventListener('touchstart', e => { tX0 = e.touches[0].clientX; tY0 = e.touches[0].clientY; }, {passive: true});
+addEventListener('touchend', e => {
+  if (tX0 == null) return;
+  const dx = e.changedTouches[0].clientX - tX0, dy = e.changedTouches[0].clientY - tY0; tX0 = null;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) { e.preventDefault(); (dx < 0 ? next : back)(); }
+});
+addEventListener('keydown', e => {
+  if (['ArrowRight', 'PageDown', 'ArrowDown', 'Enter', 'n'].includes(e.key)) { e.preventDefault(); next(); }
+  else if (['ArrowLeft', 'PageUp', 'ArrowUp', 'Backspace', 'p'].includes(e.key)) { e.preventDefault(); back(); }
+  else if (e.key === ' ') { e.preventDefault(); paused = !paused; }
+  else if (e.key === 'r' || e.key === 'R') enter(build);
+  showHint();
+});
+addEventListener('click', next);
+addEventListener('contextmenu', e => { e.preventDefault(); back(); });
+const hint = document.getElementById('hint'); let hintT;
+function showHint() { hint.style.opacity = 1; clearTimeout(hintT); hintT = setTimeout(() => hint.style.opacity = 0, 2500); }
+addEventListener('mousemove', showHint);
+addEventListener('resize', layout);
+
+// #build=N&t=T (jump to a build and fast-forward T seconds) or #build=last (end state of the last build)
+const h = new URLSearchParams(location.hash.slice(1));
+layout();
+if (h.get('build') === 'last') { enter(LAST_BUILD); for (let i = 0; i < 6000 && running; i++) step(1 / 240); }
+else {
+  enter(+(h.get('build') || 0));
+  if (h.has('t')) for (let i = 0; i < +h.get('t') * 240; i++) step(1 / 240);
+}
+showHint();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

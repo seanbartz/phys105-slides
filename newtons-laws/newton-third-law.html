@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3rd Law — Forces come in pairs</title>
+<!--
+  Builds (clicker / → / PageDown / click = next,  ← / PageUp = back):
+    0  Person on a wheeled cart holding a medicine ball, at rest
+    1  "Paired forces act on different objects": the throw; each force arrow glows with the object it acts on
+    2  "Same type of force": replay; both forces are the contact push between hands and ball
+    3  "Equal in magnitude, opposite in direction": slow-motion push with the two arrows compared side by side;
+       after release the ball (small mass) is fast, you + cart (8x the mass) roll back slowly
+  Space = pause/resume,  R = replay current build
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #fff; overflow: hidden; }
+  body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #000; cursor: default; }
+  #stage { position: absolute; width: 1024px; height: 768px; transform-origin: 0 0; }
+  #cv { position: absolute; left: 0; top: 0; width: 1024px; height: 768px; }
+  h1 { position: absolute; left: 58px; top: 22px; margin: 0; font-size: 66px; font-weight: 700; letter-spacing: -1px; }
+  h2 { position: absolute; left: 60px; top: 122px; margin: 0; font-size: 34px; font-weight: 700; }
+  ul { position: absolute; left: 60px; top: 250px; width: 410px; margin: 0; padding-left: 36px; font-size: 30px; line-height: 1.2; }
+  li { margin-bottom: 24px; opacity: 0; }
+  body.ready li { transition: opacity .4s; }
+  li.on { opacity: 1; }
+  #hint { position: fixed; right: 14px; bottom: 10px; font-size: 14px; color: #9ca3af; transition: opacity .6s; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv"></canvas>
+  <h1>3rd Law</h1>
+  <h2>Forces come in pairs</h2>
+  <ul>
+    <li>Paired forces act on <i>different</i> objects</li>
+    <li>Same <i>type</i> of force</li>
+    <li>Equal in magnitude, opposite in direction</li>
+  </ul>
+</div>
+<div id="hint">click / → next &nbsp;·&nbsp; ← back &nbsp;·&nbsp; space pause &nbsp;·&nbsp; R replay</div>
+
+<script>
+(() => {
+const SW = 1024, SH = 768;
+const FONT = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+const RED = '#e8312f', BLUE = '#1d4ed8', GRAY = '#555';
+const PREV = 'newton-second-law-air-track.html', NEXT = null, LAST_BUILD = 3;
+
+// ---------- Physics: constant push for a short time, equal & opposite forces ----------
+const M_BALL = 1, M_YOU = 8;                 // you + cart have 8x the ball's mass
+const T_PUSH = 0.35;                         // s, how long hands touch the ball (physics time)
+const D_PUSH = 55;                           // px, how far the arms extend during the push
+const A_REL = 2 * D_PUSH / (T_PUSH * T_PUSH);
+const A_BALL = A_REL * M_YOU / (M_BALL + M_YOU), A_YOU = A_REL * M_BALL / (M_BALL + M_YOU);   // F = m a, same F
+const V_BALL = A_BALL * T_PUSH, V_YOU = A_YOU * T_PUSH;                                       // 8 : 1
+const X0 = 780, FLOOR = 742, CHEST = 590, R_BALL = 26, BALL_DX0 = -48;
+// the scene is drawn 1.3x bigger: scene (x,y) -> screen (AX + (x-X0)K, FLOOR + (y-FLOOR)K)
+const K = 1.3, AX = 740;
+const M = (x, y) => [AX + (x - X0) * K, FLOOR + (y - FLOOR) * K];
+const BALL_STOP = X0 + (340 - AX) / K;        // stop when the ball reaches screen x = 340
+const HOLD = 0.7;                            // s at rest before the push starts
+
+// ---------- State ----------
+let build = 0, phase = 'rest', tRest = 0, tau = 0, running = false, paused = false;
+let X = X0, xb = X0 + BALL_DX0, ghosts = [], ghostT = 0;
+const GHOST_GAP = 2 * R_BALL + 6 / K;          // ball diameter + 6 screen px
+
+function enter(b) {
+  build = Math.max(0, Math.min(LAST_BUILD, b));
+  paused = false; phase = 'rest'; tRest = 0; tau = 0;
+  X = X0; xb = X0 + BALL_DX0; ghosts = []; ghostT = 0;
+  running = build > 0;
+  document.querySelectorAll('li').forEach((li, i) => li.classList.toggle('on', i < build));
+}
+function step(dt) {
+  if (!running || paused) return;
+  if (phase === 'rest') {
+    tRest += dt; if (tRest >= HOLD) phase = 'push';
+  } else if (phase === 'push') {
+    const ts = build === 3 ? 0.1 : 0.3;          // slow motion so the push is visible
+    tau = Math.min(T_PUSH, tau + dt * ts);
+    xb = X0 + BALL_DX0 - 0.5 * A_BALL * tau * tau;
+    X = X0 + 0.5 * A_YOU * tau * tau;
+    if (tau >= T_PUSH) { phase = 'fly'; ghosts = [xb]; }
+  } else if (phase === 'fly') {
+    xb -= V_BALL * dt; X += V_YOU * dt;
+    if (ghosts[ghosts.length - 1] - xb >= GHOST_GAP) ghosts.push(xb);   // ghosts never overlap
+    if (xb <= BALL_STOP) { running = false; phase = 'done'; }
+  }
+}
+
+// ---------- Drawing helpers (same as First Law slide) ----------
+const cv = document.getElementById('cv'), g = cv.getContext('2d');
+let scale = 1;
+function layout() {
+  const W = innerWidth, H = innerHeight;
+  scale = Math.min(W / SW, H / SH);
+  const st = document.getElementById('stage');
+  st.style.transform = `scale(${scale})`;
+  st.style.left = (W - SW * scale) / 2 + 'px';
+  st.style.top = (H - SH * scale) / 2 + 'px';
+  const dpr = devicePixelRatio || 1;
+  cv.width = Math.round(SW * scale * dpr); cv.height = Math.round(SH * scale * dpr);
+}
+function arrow(x1, y1, x2, y2, color, lw, dashed) {
+  const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy);
+  if (L < 6) return;
+  const ux = dx / L, uy = dy / L, h = Math.min(L * 0.8, Math.max(10, lw * 3.2));
+  g.save(); g.strokeStyle = g.fillStyle = color; g.lineWidth = lw; g.lineCap = 'butt';
+  if (dashed) g.setLineDash([lw * 2.2, lw * 1.6]);
+  g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2 - ux * h * 0.9, y2 - uy * h * 0.9); g.stroke();
+  g.setLineDash([]);
+  g.beginPath(); g.moveTo(x2, y2);
+  g.lineTo(x2 - ux * h - uy * h * 0.6, y2 - uy * h + ux * h * 0.6);
+  g.lineTo(x2 - ux * h + uy * h * 0.6, y2 - uy * h - ux * h * 0.6);
+  g.closePath(); g.fill(); g.restore();
+}
+function label(text, x, y, color, size, ax, ay, alpha) {
+  g.save(); g.globalAlpha = alpha == null ? 1 : alpha;
+  g.font = `${size}px ${FONT}`; g.fillStyle = color; g.textBaseline = 'middle';
+  const lines = text.split('\n'), lh = size * 1.15;
+  const w = Math.max(...lines.map(l => g.measureText(l).width)), h = lines.length * lh;
+  let cx = x + ax * w / 2, cy = y + ay * h / 2;
+  cx = Math.min(SW - 10 - w / 2, Math.max(10 + w / 2, cx));
+  g.textAlign = 'left'; g.lineJoin = 'round'; g.strokeStyle = '#fff'; g.lineWidth = 7;
+  lines.forEach((l, i) => g.strokeText(l, cx - w / 2, cy - h / 2 + lh * (i + 0.5)));
+  lines.forEach((l, i) => g.fillText(l, cx - w / 2, cy - h / 2 + lh * (i + 0.5)));
+  g.restore();
+  return {cx, cy, w, h};
+}
+// symbol with subscript, e.g.  F_{person on ball};  ax: -1 left of x, 0 centered, 1 right of x
+function sub(main, subscript, x, y, color, ax) {
+  g.save();
+  const big = `700 34px ${FONT}`, small = `600 26px ${FONT}`;
+  g.font = big; const w1 = g.measureText(main).width;
+  g.font = small; const w2 = g.measureText(subscript).width;
+  const w = w1 + 2 + w2;
+  let left = x + (ax - 1) * w / 2;
+  left = Math.min(SW - 10 - w, Math.max(10, left));
+  g.fillStyle = color; g.strokeStyle = '#fff'; g.lineWidth = 7; g.lineJoin = 'round'; g.textBaseline = 'alphabetic';
+  g.font = big; g.strokeText(main, left, y + 10); g.fillText(main, left, y + 10);
+  g.font = small; g.strokeText(subscript, left + w1 + 2, y + 20); g.fillText(subscript, left + w1 + 2, y + 20);
+  g.restore();
+}
+
+// ---------- Scene ----------
+function shoulder() { return {x: X + 20, y: CHEST + 2}; }
+function hand() { return {x: xb + R_BALL - 2, y: CHEST}; }     // hands on the back of the ball (until release)
+function drawPerson(glow) {
+  g.save();
+  if (glow) { g.shadowColor = glow; g.shadowBlur = 22; }
+  // cart: board + wheels
+  g.fillStyle = '#9a6a3a'; g.beginPath(); g.roundRect(X - 85, 704, 160, 12, 4); g.fill();
+  g.fillStyle = '#222';
+  for (const wx of [X - 60, X + 50]) { g.beginPath(); g.arc(wx, FLOOR - 13, 13, 0, 2 * Math.PI); g.fill(); }
+  g.fillStyle = '#bbb';
+  for (const wx of [X - 60, X + 50]) { g.beginPath(); g.arc(wx, FLOOR - 13, 4, 0, 2 * Math.PI); g.fill(); }
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  // legs (knees up, feet on the board, facing left)
+  g.strokeStyle = '#3b5b8c'; g.lineWidth = 22;
+  g.beginPath(); g.moveTo(X + 35, 688); g.lineTo(X - 18, 640); g.lineTo(X - 50, 694); g.stroke();
+  g.fillStyle = '#111'; g.beginPath(); g.ellipse(X - 58, 699, 15, 6, 0, 0, 2 * Math.PI); g.fill();
+  // torso
+  g.strokeStyle = '#222'; g.lineWidth = 36;
+  g.beginPath(); g.moveTo(X + 35, 684); g.lineTo(X + 22, 590); g.stroke();
+  // head + hair
+  g.fillStyle = '#5b3a1e'; g.beginPath(); g.arc(X + 19, 545, 24, 0, 2 * Math.PI); g.fill();
+  g.fillStyle = '#e0ac8a'; g.beginPath(); g.arc(X + 12, 550, 20, 0, 2 * Math.PI); g.fill();
+  g.restore();
+}
+function drawArm(glow) {
+  const s = shoulder(), h = phase === 'fly' || phase === 'done' ? {x: X - 70, y: CHEST - 8} : hand();
+  const L1 = 52, L2 = 52, dx = h.x - s.x, dy = h.y - s.y, d = Math.min(L1 + L2 - 0.5, Math.hypot(dx, dy));
+  const base = Math.atan2(dy, dx), a = Math.acos((L1 * L1 + d * d - L2 * L2) / (2 * L1 * d));
+  const e = {x: s.x + L1 * Math.cos(base - a), y: s.y + L1 * Math.sin(base - a) + 0};  // elbow bends down
+  const e2 = {x: s.x + L1 * Math.cos(base + a), y: s.y + L1 * Math.sin(base + a)};
+  const el = e2.y > e.y ? e2 : e;
+  g.save(); if (glow) { g.shadowColor = glow; g.shadowBlur = 22; }
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  g.strokeStyle = '#222'; g.lineWidth = 15;
+  g.beginPath(); g.moveTo(s.x, s.y); g.lineTo(el.x, el.y); g.lineTo(h.x, h.y); g.stroke();
+  g.fillStyle = '#e0ac8a'; g.beginPath(); g.arc(h.x, h.y, 8, 0, 2 * Math.PI); g.fill();
+  g.restore();
+}
+function drawBall(x, alpha, glow) {
+  g.save(); g.globalAlpha = alpha;
+  if (glow) { g.shadowColor = glow; g.shadowBlur = 24; }
+  g.fillStyle = '#6b4a2e'; g.beginPath(); g.arc(x, CHEST, R_BALL, 0, 2 * Math.PI); g.fill();
+  g.shadowBlur = 0;
+  g.strokeStyle = 'rgba(0,0,0,0.45)'; g.lineWidth = 2;
+  g.beginPath(); g.arc(x, CHEST, R_BALL, 0, 2 * Math.PI); g.stroke();
+  g.beginPath(); g.ellipse(x, CHEST, R_BALL * 0.45, R_BALL, 0, 0, 2 * Math.PI); g.stroke();
+  g.beginPath(); g.moveTo(x - R_BALL, CHEST); g.lineTo(x + R_BALL, CHEST); g.stroke();
+  g.restore();
+}
+
+function draw() {
+  const dpr = devicePixelRatio || 1;
+  g.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+  g.clearRect(0, 0, SW, SH);
+  // floor
+  g.strokeStyle = '#bbb'; g.lineWidth = 3;
+  g.beginPath(); g.moveTo(40, FLOOR); g.lineTo(SW - 20, FLOOR); g.stroke();
+
+  const pushing = phase === 'push';
+  const flying = phase === 'fly' || phase === 'done';
+
+  g.save(); g.translate(AX, FLOOR); g.scale(K, K); g.translate(-X0, -FLOOR);
+  ghosts.forEach(x => { if (x - xb >= GHOST_GAP) drawBall(x, 0.16); });   // big spacing = fast
+  drawPerson(pushing ? BLUE : null);
+  drawBall(xb, 1, pushing ? RED : null);
+  drawArm(pushing ? BLUE : null);
+  g.restore();
+
+  const [bx, cy] = M(xb, CHEST), rb = R_BALL * K;
+  if (pushing) {
+    const F = 120, [hx] = M(hand().x, CHEST);
+    // force ON THE BALL (from your hands): points left, drawn on the ball
+    arrow(bx, cy, bx - F, cy, RED, 9);
+    sub('F', 'person on ball', bx - F - 12, cy - 6, RED, -1);
+    // force ON YOU (from the ball): points right, drawn at your hands
+    arrow(hx, cy, hx + F, cy, BLUE, 9);
+    sub('F', 'ball on person', Math.max(hx + 8, M(X + 32, 0)[0] + 20), cy - 52, BLUE, 1);
+
+    if (build === 2) {           // same type: both are the contact push where hands meet ball
+      g.save(); g.strokeStyle = '#000'; g.lineWidth = 3; g.setLineDash([6, 5]);
+      g.beginPath(); g.arc(hx - 4, cy, 30, 0, 2 * Math.PI); g.stroke(); g.restore();
+      label('Both: contact forces', hx - 60, cy - 112, '#000', 30, 0, 0);
+    }
+    if (build === 3) {           // side-by-side comparison
+      const L = 190, xl = 610, xr = xl + L, y1 = 285, y2 = 375;
+      arrow(xr, y1, xl, y1, RED, 10);
+      sub('F', 'person on ball', (xl + xr) / 2, y1 - 46, RED, 0);
+      arrow(xl, y2, xr, y2, BLUE, 10);
+      sub('F', 'ball on person', (xl + xr) / 2, y2 + 32, BLUE, 0);
+      g.save(); g.strokeStyle = '#888'; g.lineWidth = 2; g.setLineDash([5, 5]);
+      for (const x of [xl, xr]) { g.beginPath(); g.moveTo(x, y1 - 24); g.lineTo(x, y2 + 24); g.stroke(); }
+      g.restore();
+    }
+  }
+
+  if (flying) {
+    // velocities after release, same scale for both: 8 : 1
+    const VS = 0.6 * K;
+    arrow(bx - rb - 4, cy, bx - rb - 4 - V_BALL * VS, cy, '#111', 7);
+    sub('v', 'ball', bx - rb - 4 - V_BALL * VS / 2, cy - 44, '#111', 0);
+    const [px, py] = M(X + 62, 605);
+    arrow(px, py, px + V_YOU * VS, py, '#111', 7);
+    sub('v', 'person', px + 2, py - 42, '#111', 1);
+  }
+}
+
+// ---------- Loop & input ----------
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  step(dt); draw();
+  requestAnimationFrame(loop);
+}
+function next() { if (build === LAST_BUILD) { if (NEXT) location.href = NEXT; } else enter(build + 1); }
+function back() { if (build === 0) location.href = PREV + '#build=last'; else enter(build - 1); }
+// touch: swipe left = next, swipe right = back (tap = next via click)
+let tX0 = null, tY0 = null;
+addEventListener('touchstart', e => { tX0 = e.touches[0].clientX; tY0 = e.touches[0].clientY; }, {passive: true});
+addEventListener('touchend', e => {
+  if (tX0 == null) return;
+  const dx = e.changedTouches[0].clientX - tX0, dy = e.changedTouches[0].clientY - tY0; tX0 = null;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) { e.preventDefault(); (dx < 0 ? next : back)(); }
+});
+addEventListener('keydown', e => {
+  if (['ArrowRight', 'PageDown', 'ArrowDown', 'Enter', 'n'].includes(e.key)) { e.preventDefault(); next(); }
+  else if (['ArrowLeft', 'PageUp', 'ArrowUp', 'Backspace', 'p'].includes(e.key)) { e.preventDefault(); back(); }
+  else if (e.key === ' ') { e.preventDefault(); paused = !paused; }
+  else if (e.key === 'r' || e.key === 'R') enter(build);
+  showHint();
+});
+addEventListener('click', next);
+addEventListener('contextmenu', e => { e.preventDefault(); back(); });
+const hint = document.getElementById('hint'); let hintT;
+function showHint() { hint.style.opacity = 1; clearTimeout(hintT); hintT = setTimeout(() => hint.style.opacity = 0, 2500); }
+addEventListener('mousemove', showHint);
+addEventListener('resize', layout);
+
+// #build=N&t=T (test hook: jump to a build, fast-forward T s)   #build=last (end state of last build)
+const hp = new URLSearchParams(location.hash.slice(1));
+layout();
+if (hp.get('build') === 'last') { enter(LAST_BUILD); for (let i = 0; i < 240 * 60 && running; i++) step(1 / 240); }
+else {
+  enter(+(hp.get('build') || 0));
+  if (hp.has('t')) for (let i = 0; i < +hp.get('t') * 240; i++) step(1 / 240);
+}
+showHint();
+requestAnimationFrame(() => { document.body.classList.add('ready'); requestAnimationFrame(loop); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2nd Law — Force causes acceleration</title>
+<!--
+  Builds (clicker / → / PageDown / click = next,  ← / PageUp = back):
+    0  Title only
+    1  "Bigger force, bigger acceleration": identical boxes pushed with F and 2F (strobe images)
+    2  "Bigger mass, smaller acceleration": same F on a golf ball and on a truck
+    3  F_net = m a: two opposing forces (3 N, 1 N) → net force 2 N → box accelerates
+  Space = pause/resume,  R = replay current build
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #fff; overflow: hidden; }
+  body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #000; cursor: default; }
+  #stage { position: absolute; width: 1024px; height: 768px; transform-origin: 0 0; }
+  #cv { position: absolute; left: 0; top: 0; width: 1024px; height: 768px; }
+  h1 { position: absolute; left: 58px; top: 22px; margin: 0; font-size: 66px; font-weight: 700; letter-spacing: -1px; }
+  h2 { position: absolute; left: 60px; top: 122px; margin: 0; font-size: 34px; font-weight: 700; }
+  .b { position: absolute; left: 60px; width: 350px; margin: 0; padding-left: 36px; font-size: 30px; line-height: 1.2;
+       list-style: disc; opacity: 0; }
+  .b.show { opacity: 1; }
+  #b1 { top: 222px; }
+  #b2 { top: 440px; }
+  #b3 { top: 600px; font-size: 38px; }
+  #b4 { top: 660px; left: 100px; width: 330px; font-size: 24px; list-style: circle; }
+  .eq { font-family: "Cambria Math", "STIX Two Math", "Times New Roman", serif; font-style: italic; }
+  .eq sub { font-size: .6em; font-style: italic; }
+  .vec { position: relative; display: inline-block; }
+  .vec::before { content: "\2192"; position: absolute; left: 50%; top: -.62em; transform: translateX(-50%);
+                 font-size: .6em; font-style: normal; }
+  #hint { position: fixed; right: 14px; bottom: 10px; font-size: 14px; color: #9ca3af; transition: opacity .6s; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv"></canvas>
+  <h1>2nd Law</h1>
+  <h2>Force causes acceleration</h2>
+  <ul class="b" id="b1"><li>Bigger force, bigger acceleration</li></ul>
+  <ul class="b" id="b2"><li>Bigger mass, smaller acceleration</li></ul>
+  <ul class="b" id="b3"><li><span class="eq"><span class="vec">F</span><sub>net</sub> = m<span class="vec">a</span></span></li></ul>
+  <ul class="b" id="b4"><li>If there are multiple forces, need to find the net (total) force</li></ul>
+</div>
+<div id="hint">click / → next &nbsp;·&nbsp; ← back &nbsp;·&nbsp; space pause &nbsp;·&nbsp; R replay</div>
+
+<script>
+(() => {
+const SW = 1024, SH = 768;
+const FONT = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+const RED = '#e8312f', BLUE = '#1d4ed8', BOX = '#333', TRACK = '#9ca3af';
+
+// ---------- Scene 1: F vs 2F on identical boxes ----------
+const S1 = {x0: 560, yA: 235, yB: 325, w: 56, h: 44, a1: 70, xMax: 900, strobe: 0.2, LF: 55};
+S1.a2 = 2 * S1.a1;
+S1.end = Math.sqrt(2 * (S1.xMax - S1.x0) / S1.a2);
+
+// ---------- Scene 2: same F on golf ball and truck ----------
+const S2 = {x0: 560, yBall: 425, yTruck: 565, r: 12, aBall: 500, ratio: 50, push: 0.8, xBallMax: 1000,
+            LF: 70, strobe: 0.1, end: 4.0};
+S2.aTruck = S2.aBall / S2.ratio;
+function pushX(a, T, t) { return t <= T ? 0.5 * a * t * t : 0.5 * a * T * T + a * T * (t - T); }
+
+// ---------- Scene 3: two forces → net force ----------
+const S3 = {x0: 575, y: 690, w: 64, h: 50, u: 34, a: 100, tNet: 1.2, tGo: 2.2, xMax: 781, strobe: 0.2};
+S3.end = S3.tGo + Math.sqrt(2 * (S3.xMax - S3.x0) / S3.a);
+
+const END = [0, S1.end, S2.end, S3.end];
+
+// ---------- State ----------
+let build = 0, tau = 0, paused = false;
+const running = () => build > 0 && tau < END[build] && !paused;
+function enter(b) {
+  build = Math.max(0, Math.min(LAST_BUILD, b)); tau = 0; paused = false;
+  document.getElementById('b1').classList.toggle('show', build >= 1);
+  document.getElementById('b2').classList.toggle('show', build >= 2);
+  document.getElementById('b3').classList.toggle('show', build >= 3);
+}
+function step(dt) { if (running()) tau = Math.min(END[build], tau + dt); }
+
+// ---------- Drawing ----------
+const cv = document.getElementById('cv'), g = cv.getContext('2d');
+let scale = 1;
+function layout() {
+  const W = innerWidth, H = innerHeight;
+  scale = Math.min(W / SW, H / SH);
+  const st = document.getElementById('stage');
+  st.style.transform = `scale(${scale})`;
+  st.style.left = (W - SW * scale) / 2 + 'px';
+  st.style.top = (H - SH * scale) / 2 + 'px';
+  const dpr = devicePixelRatio || 1;
+  cv.width = Math.round(SW * scale * dpr); cv.height = Math.round(SH * scale * dpr);
+}
+function arrow(x1, y1, x2, y2, color, lw, dashed) {
+  const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy);
+  if (L < 6) return;
+  const ux = dx / L, uy = dy / L, h = Math.max(10, lw * 3.2);
+  g.save(); g.strokeStyle = g.fillStyle = color; g.lineWidth = lw; g.lineCap = 'butt';
+  if (dashed) g.setLineDash([lw * 2.2, lw * 1.6]);
+  g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2 - ux * h * 0.9, y2 - uy * h * 0.9); g.stroke();
+  g.setLineDash([]);
+  g.beginPath(); g.moveTo(x2, y2);
+  g.lineTo(x2 - ux * h - uy * h * 0.6, y2 - uy * h + ux * h * 0.6);
+  g.lineTo(x2 - ux * h + uy * h * 0.6, y2 - uy * h - ux * h * 0.6);
+  g.closePath(); g.fill(); g.restore();
+}
+// text block; (x,y) = anchor, ax/ay in {-1,0,1}: which side of the anchor the text sits on
+function label(text, x, y, color, size, ax, ay, alpha) {
+  g.save(); g.globalAlpha = alpha == null ? 1 : alpha;
+  g.font = `${size}px ${FONT}`; g.fillStyle = color; g.textBaseline = 'middle';
+  const lines = text.split('\n'), lh = size * 1.15;
+  const w = Math.max(...lines.map(l => g.measureText(l).width)), h = lines.length * lh;
+  let cx = x + ax * w / 2, cy = y + ay * h / 2;
+  cx = Math.min(SW - 10 - w / 2, Math.max(10 + w / 2, cx));
+  g.textAlign = 'left'; g.lineJoin = 'round'; g.strokeStyle = '#fff'; g.lineWidth = 7;
+  lines.forEach((l, i) => g.strokeText(l, cx - w / 2, cy - h / 2 + lh * (i + 0.5)));
+  lines.forEach((l, i) => g.fillText(l, cx - w / 2, cy - h / 2 + lh * (i + 0.5)));
+  g.restore();
+  return {cx, cy, w, h};
+}
+// run of text pieces on one baseline: [[text, size, color, italic, dy]]
+function textRun(parts, x, y, alpha) {
+  g.save(); g.globalAlpha = alpha == null ? 1 : alpha; g.textBaseline = 'alphabetic';
+  for (const [t, size, color, italic, dy] of parts) {
+    g.font = `${italic ? 'italic ' : ''}${size}px ${FONT}`; g.fillStyle = color;
+    g.fillText(t, x, y + (dy || 0)); x += g.measureText(t).width;
+  }
+  g.restore();
+  return x;
+}
+function track(y, x1 = 450, x2 = 1012) {
+  g.save(); g.strokeStyle = TRACK; g.lineWidth = 3;
+  g.beginPath(); g.moveTo(x1, y + 1.5); g.lineTo(x2, y + 1.5); g.stroke(); g.restore();
+}
+function box(x, yBottom, w, h, alpha, txt) {
+  g.save(); g.globalAlpha = alpha;
+  if (alpha < 1) {                                   // strobe "ghost": outline only
+    g.strokeStyle = BOX; g.lineWidth = 2; g.beginPath(); g.roundRect(x + 1, yBottom - h + 1, w - 2, h - 2, 5); g.stroke();
+    g.restore(); return;
+  }
+  g.fillStyle = BOX; g.beginPath(); g.roundRect(x, yBottom - h, w, h, 5); g.fill();
+  if (txt) { g.fillStyle = '#fff'; g.font = `italic 26px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+             g.fillText(txt, x + w / 2, yBottom - h / 2 + 1); }
+  g.restore();
+}
+function ball(cx, yBottom, r, alpha) {
+  g.save(); g.globalAlpha = alpha;
+  g.fillStyle = '#fff'; g.strokeStyle = '#333'; g.lineWidth = 2.5;
+  g.beginPath(); g.arc(cx, yBottom - r, r, 0, 2 * Math.PI); g.fill(); g.stroke();
+  g.fillStyle = '#9ca3af';
+  for (const [dx, dy] of [[-4, -3], [3, -5], [4, 2], [-2, 4]]) { g.beginPath(); g.arc(cx + dx, yBottom - r + dy, 1.4, 0, 7); g.fill(); }
+  g.restore();
+}
+function truck(x, yBottom) {                       // rear of truck at x, facing right, length 150
+  g.save(); g.lineWidth = 2.5; g.strokeStyle = '#222'; g.fillStyle = '#fff';
+  g.beginPath(); g.rect(x, yBottom - 84, 108, 62); g.fill(); g.stroke();            // cargo box
+  g.beginPath(); g.moveTo(x + 112, yBottom - 22); g.lineTo(x + 112, yBottom - 62); g.lineTo(x + 138, yBottom - 62);
+  g.lineTo(x + 150, yBottom - 42); g.lineTo(x + 150, yBottom - 22); g.closePath(); g.fill(); g.stroke();   // cab
+  g.fillStyle = '#bfdbfe'; g.beginPath(); g.moveTo(x + 118, yBottom - 56); g.lineTo(x + 135, yBottom - 56);
+  g.lineTo(x + 144, yBottom - 43); g.lineTo(x + 118, yBottom - 43); g.closePath(); g.fill(); g.stroke();
+  g.beginPath(); g.moveTo(x - 2, yBottom - 22); g.lineTo(x + 152, yBottom - 22); g.stroke();
+  g.fillStyle = '#222';
+  for (const wx of [x + 24, x + 84, x + 130]) {
+    g.beginPath(); g.arc(wx, yBottom - 11, 11, 0, 7); g.fill();
+    g.save(); g.fillStyle = '#ddd'; g.beginPath(); g.arc(wx, yBottom - 11, 4, 0, 7); g.fill(); g.restore();
+  }
+  g.restore();
+}
+
+// ---------- Strobe images ----------
+// Positions at equal time steps 0, strobe, 2·strobe, … < tNow.  Early images crowd together, so keep only the
+// tail where consecutive images are ≥ minGap apart (spacing only grows, so timing stays regular and nothing
+// overlaps), and drop any that would sit under the current object's arrow/label (x + size > clearFrom).
+function strobeXs(posAt, tNow, strobe, minGap, size = 0, clearFrom = Infinity) {
+  const p = []; for (let ts = 0; ts < tNow - 1e-6; ts += strobe) p.push(posAt(ts));
+  return p.filter((x, k) => ((k > 0 && x - p[k - 1] >= minGap) || (k + 1 < p.length && p[k + 1] - x >= minGap))
+                            && x + size <= clearFrom - 6);
+}
+// timer-tape dots just below a track
+function dots(xs, y) {
+  g.save(); g.fillStyle = '#555';
+  for (const x of xs) { g.beginPath(); g.arc(x, y + 12, 4, 0, 2 * Math.PI); g.fill(); }
+  g.restore();
+}
+
+// ---------- Scenes ----------
+function scene1(t) {
+  const {x0, yA, yB, w, h, a1, a2, strobe, LF} = S1;
+  for (const [y, a, L, name, aName] of [[yA, a1, LF, 'F', 'a'], [yB, a2, 2 * LF, '2F', '2a']]) {
+    track(y);
+    const x = x0 + 0.5 * a * t * t, my = y - h / 2;
+    dots(strobeXs(ts => x0 + w / 2 + 0.5 * a * ts * ts, t, strobe, 12), y);
+    box(x, y, w, h, 1, 'm');
+    arrow(x - 4 - L, my, x - 4, my, RED, 6);
+    label(name, x - 4 - L / 2, my - 28, RED, 30, 0, 0);
+    if (t >= S1.end - 1e-6) {                        // result: acceleration arrows
+      const La = a * 0.5, cx = x + w / 2;
+      arrow(cx - La / 2, y - h - 14, cx + La / 2, y - h - 14, BLUE, 5);
+      label(aName, cx, y - h - 40, BLUE, 30, 0, 0);
+    }
+  }
+}
+function scene2(t) {
+  const {x0, yBall, yTruck, r, aBall, aTruck, push, xBallMax, LF, strobe} = S2;
+  // golf ball
+  track(yBall);
+  const xb = t2 => Math.min(xBallMax, x0 + pushX(aBall, push, t2));
+  const bx = xb(t);
+  const clearBall = t < push ? bx - r - 4 - LF : bx - r;            // keep the F arrow/label clear while pushing
+  for (const gx of strobeXs(ts => xb(ts) - r, t, strobe, 2 * r + 6, 2 * r, clearBall)) ball(gx + r, yBall, r, 0.35);
+  ball(bx, yBall, r, 1);
+  if (t < push) { arrow(bx - r - 4 - LF, yBall - r, bx - r - 4, yBall - r, RED, 6); label('F', bx - r - 4 - LF / 2, yBall - r - 28, RED, 30, 0, 0); }
+  textRun([['F', 30, RED], [' = ', 30, '#555'], ['m', 18, '#000'], ['a', 64, '#000']], 880, yBall - 42);
+  // truck
+  track(yTruck);
+  const tx = x0 + pushX(aTruck, push, t);
+  truck(tx, yTruck);
+  if (t < push) { arrow(tx - 4 - LF, yTruck - 50, tx - 4, yTruck - 50, RED, 6); label('F', tx - 4 - LF / 2, yTruck - 78, RED, 30, 0, 0); }
+  textRun([['F', 30, RED], [' = ', 30, '#555'], ['m', 64, '#000'], ['a', 18, '#000']], 860, yTruck - 30);
+}
+function scene3(t) {
+  const {x0, y, w, h, u, a, tNet, tGo, strobe} = S3;
+  track(y);
+  const tm = Math.max(0, t - tGo);                  // motion starts once the net force is shown
+  const x = x0 + 0.5 * a * tm * tm, my = y - h / 2;
+  // ghosts stay left of the "1 N" arrow + label (≈ u + 60 px behind the box)
+  dots(strobeXs(ts => x0 + w / 2 + 0.5 * a * ts * ts, tm, strobe, 12), y);
+  box(x, y, w, h, 1, 'm');
+  arrow(x + w + 2, my, x + w + 2 + 3 * u, my, RED, 6);
+  label('3 N', x + w + 10 + 3 * u, my, RED, 28, 1, 0);
+  arrow(x - 2, my, x - 2 - u, my, RED, 6);
+  label('1 N', x - 10 - u, my, RED, 28, -1, 0);
+  if (t >= tNet) {
+    const f = Math.min(1, (t - tNet) / 0.4), cx = x + w / 2, ny = y + 32;
+    arrow(cx, ny, cx + 2 * u * f, ny, '#a3161a', 8);
+    if (f >= 1) textRun([['F', 28, '#a3161a', true], ['net', 17, '#a3161a', true, 6], [' = 2 N', 28, '#a3161a']], cx + 2 * u + 12, ny + 10);
+  }
+  if (t > tGo) {
+    const La = 2 * u;
+    arrow(x + w / 2 - La / 2, y - h - 16, x + w / 2 + La / 2, y - h - 16, BLUE, 5);
+    label('a', x + w / 2 + La / 2 + 8, y - h - 18, BLUE, 30, 1, 0);
+  }
+  document.getElementById('b4').classList.toggle('show', t >= tNet);
+}
+const SCENES = [null, scene1, scene2, scene3];
+
+function draw() {
+  const dpr = devicePixelRatio || 1;
+  g.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+  g.clearRect(0, 0, SW, SH);
+  for (let b = 1; b <= build; b++) SCENES[b](b === build ? tau : END[b]);
+  if (build < 3) document.getElementById('b4').classList.remove('show');
+}
+
+// ---------- Loop & input ----------
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  step(dt); draw();
+  requestAnimationFrame(loop);
+}
+const PREV = 'newton-frame-of-reference.html', NEXT = 'newton-second-law-air-track.html', LAST_BUILD = 3;
+const next = () => { if (build === LAST_BUILD) { if (NEXT) location.href = NEXT; } else enter(build + 1); };
+const back = () => { if (build === 0) location.href = PREV + '#build=last'; else enter(build - 1); };
+// touch: swipe left = next, swipe right = back (tap = next via click)
+let tX0 = null, tY0 = null;
+addEventListener('touchstart', e => { tX0 = e.touches[0].clientX; tY0 = e.touches[0].clientY; }, {passive: true});
+addEventListener('touchend', e => {
+  if (tX0 == null) return;
+  const dx = e.changedTouches[0].clientX - tX0, dy = e.changedTouches[0].clientY - tY0; tX0 = null;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) { e.preventDefault(); (dx < 0 ? next : back)(); }
+});
+addEventListener('keydown', e => {
+  if (['ArrowRight', 'PageDown', 'ArrowDown', 'Enter', 'n'].includes(e.key)) { e.preventDefault(); next(); }
+  else if (['ArrowLeft', 'PageUp', 'ArrowUp', 'Backspace', 'p'].includes(e.key)) { e.preventDefault(); back(); }
+  else if (e.key === ' ') { e.preventDefault(); paused = !paused; }
+  else if (e.key === 'r' || e.key === 'R') enter(build);
+  showHint();
+});
+addEventListener('click', next);
+addEventListener('contextmenu', e => { e.preventDefault(); back(); });
+const hint = document.getElementById('hint'); let hintT;
+function showHint() { hint.style.opacity = 1; clearTimeout(hintT); hintT = setTimeout(() => hint.style.opacity = 0, 2500); }
+addEventListener('mousemove', showHint);
+addEventListener('resize', layout);
+
+// test hook: #build=2&t=3  (jump to a build and fast-forward t seconds);  #build=last
+const hp = new URLSearchParams(location.hash.slice(1));
+layout();
+if (hp.get('build') === 'last') { enter(LAST_BUILD); tau = END[LAST_BUILD]; }
+else enter(+(hp.get('build') || 0));
+if (hp.has('t')) for (let i = 0; i < +hp.get('t') * 240; i++) step(1 / 240);
+showHint();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

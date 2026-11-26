@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Misconception: Frame of reference</title>
+<!--
+  Builds (clicker / → / PageDown / click = next,  ← / PageUp = back):
+    0  Subway car at rest, you holding a strap
+    1  Let go, slippery floor (no forces on you): the car accelerates forward, you stay put
+       relative to the platform until the back of the car reaches you  →  ✗ "I'm being thrown backward"
+    2  Replay holding the strap with friction at your feet: forces F point FORWARD and you
+       accelerate with the car  →  ✓ "I feel a force pulling me forward"
+  Space = pause/resume,  R = replay current build
+  At the last build, "next" goes to the next slide; at build 0, "back" goes to the previous slide.
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #fff; overflow: hidden; }
+  body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #000; cursor: default; }
+  #stage { position: absolute; width: 1024px; height: 768px; transform-origin: 0 0; }
+  #cv, #icons { position: absolute; left: 0; top: 0; width: 1024px; height: 768px; }
+  h1 { position: absolute; left: 0; width: 1024px; top: 30px; margin: 0; text-align: center;
+       font-size: 54px; font-weight: 700; letter-spacing: -0.5px; }
+  .quote { position: absolute; width: 290px; font-size: 30px; line-height: 1.2; transition: opacity .6s; }
+  #qx { left: 181px; top: 246px; }
+  #qc { left: 158px; top: 453px; }
+  #gx, #gc { transition: opacity .6s; }
+  .hide { opacity: 0; }
+  .notrans, .notrans * { transition: none !important; }
+  #hint { position: fixed; right: 14px; bottom: 10px; font-size: 14px; color: #9ca3af; transition: opacity .6s; }
+</style>
+</head>
+<body class="notrans">
+<div id="stage">
+  <canvas id="cv"></canvas>
+  <svg id="icons" viewBox="0 0 1024 768" aria-hidden="true">
+    <g id="gx" class="hide"><path id="Brain" transform="translate(56.44,237.23)" fill="#000000" fill-rule="evenodd" d="M44.71,0.00 C36.77,0.09 27.77,3.92 24.01,11.00 C24.01,11.00 23.97,11.00 23.97,11.00 C21.74,15.74 22.95,19.31 23.05,19.52 C23.23,19.99 22.99,20.52 22.52,20.70 C22.43,20.74 22.36,20.77 22.27,20.77 C21.87,20.80 21.49,20.54 21.34,20.17 C21.28,19.96 20.04,16.46 21.74,11.69 C21.93,11.13 21.56,10.53 20.97,10.53 C11.39,10.53 1.59,23.99 2.03,32.02 C2.06,32.64 2.77,32.92 3.24,32.54 C4.54,31.43 5.96,30.53 7.48,29.91 C7.89,29.75 8.35,29.88 8.60,30.25 C8.94,30.74 8.69,31.43 8.16,31.62 C6.05,32.45 4.38,33.76 3.01,35.31 C-3.09,43.58 0.82,55.83 8.13,62.64 C9.41,63.76 10.71,64.72 12.01,65.53 C12.59,65.87 13.77,66.50 13.74,66.56 C21.96,71.15 31.24,70.78 34.89,70.43 C35.66,70.37 36.44,70.55 37.06,70.99 C38.36,71.85 47.16,77.96 61.95,77.62 C65.61,77.53 70.11,77.10 74.91,75.58 C81.27,73.56 86.19,68.45 85.79,62.22 C84.74,53.72 80.71,48.67 72.84,45.07 C68.97,43.30 64.53,42.99 61.15,43.11 C59.13,43.21 57.34,43.43 55.79,43.68 L55.57,43.73 C50.23,44.66 47.53,46.31 47.50,46.34 C47.38,46.43 47.23,46.47 47.11,46.47 C46.77,46.50 46.45,46.34 46.27,46.03 C45.99,45.60 46.14,45.04 46.55,44.76 C46.67,44.70 48.29,43.70 51.45,42.77 C52.01,42.62 52.10,41.87 51.63,41.57 C48.56,39.52 44.50,35.92 43.32,30.71 C43.19,30.22 43.51,29.72 44.01,29.63 C44.50,29.50 44.97,29.82 45.09,30.35 C46.39,36.14 52.06,39.87 54.67,41.29 C55.32,41.64 56.06,41.78 56.78,41.66 C59.78,41.23 67.28,40.54 73.58,43.42 C75.93,44.48 77.96,45.70 79.66,47.03 C80.28,47.53 81.18,47.55 81.83,47.09 C85.52,44.48 89.20,43.49 92.89,44.11 C97.88,44.98 101.42,48.67 102.72,50.78 C102.97,51.18 102.91,51.74 102.53,52.05 C102.38,52.17 102.22,52.23 102.04,52.23 C101.73,52.26 101.39,52.10 101.21,51.79 C100.15,50.09 96.98,46.69 92.59,45.94 C89.45,45.41 86.26,46.25 83.03,48.51 C82.50,48.88 82.41,49.59 82.82,50.09 C84.06,51.58 85.08,53.26 85.86,55.09 C86.73,57.20 87.35,59.48 87.65,62.18 C95.62,65.00 116.64,63.42 120.64,49.72 C123.09,41.35 118.47,31.31 111.49,28.80 C110.66,28.48 109.79,29.01 109.58,29.88 C108.96,32.45 107.74,34.50 106.56,35.87 C106.25,36.21 106.25,36.74 106.56,37.11 C107.13,37.76 107.96,38.96 108.86,41.01 C109.05,41.44 108.89,42.04 108.45,42.25 C108.33,42.31 108.24,42.34 108.11,42.34 C107.71,42.37 107.34,42.13 107.18,41.76 C107.18,41.73 106.47,39.87 105.02,38.19 C103.12,36.05 100.89,35.22 98.35,35.71 C97.79,35.81 97.26,35.40 97.26,34.81 C97.26,34.35 97.60,33.97 98.04,33.91 C100.73,33.38 102.87,34.25 103.93,34.84 C104.40,35.09 104.98,34.99 105.33,34.56 C107.74,31.71 110.88,25.39 106.41,18.82 C103.62,14.72 97.85,12.27 93.26,12.11 C92.89,12.11 92.55,12.12 92.18,12.15 C91.41,12.21 89.98,12.27 88.06,12.73 C85.06,13.45 83.41,14.69 83.38,14.69 C82.98,15.00 82.41,14.91 82.10,14.48 C81.82,14.07 81.89,13.48 82.30,13.20 C82.45,13.07 84.53,11.59 88.19,10.78 C88.71,10.66 88.95,10.01 88.61,9.57 C83.78,2.81 67.01,-0.75 59.41,2.78 C58.70,3.12 58.39,3.99 58.76,4.67 C59.60,6.35 59.97,8.27 59.78,10.10 C59.75,10.56 59.38,10.91 58.95,10.94 C58.88,10.94 58.86,10.94 58.79,10.94 C58.29,10.88 57.93,10.44 57.99,9.91 C58.05,9.29 58.48,4.80 54.30,2.26 C51.72,0.70 48.33,-0.03 44.71,0.00 Z M40.48,13.63 C43.43,13.66 46.23,14.55 48.84,16.34 C51.91,18.41 53.99,21.26 55.20,23.25 C55.44,23.65 55.98,23.80 56.41,23.58 C63.82,19.58 71.78,20.39 78.30,25.85 C78.61,26.10 79.07,26.13 79.41,25.88 C80.59,25.01 83.72,23.25 88.53,24.40 C89.02,24.46 89.33,24.95 89.20,25.48 C89.08,25.98 88.58,26.26 88.09,26.13 C84.86,25.48 82.23,25.92 80.24,27.50 C78.38,28.98 77.21,31.46 77.08,34.12 C77.05,34.59 76.71,34.96 76.25,34.99 C76.09,34.99 75.94,34.99 75.78,34.87 C75.45,34.68 75.25,34.31 75.28,33.94 C75.38,31.86 76.03,29.88 77.08,28.27 C77.36,27.87 77.27,27.34 76.90,27.03 C67.94,19.68 59.19,23.83 55.75,26.03 C55.29,26.31 54.70,26.16 54.45,25.66 C53.71,24.14 51.56,20.36 47.81,17.82 C44.09,15.31 39.97,14.78 35.54,16.27 C35.04,16.42 34.52,16.14 34.40,15.65 C34.27,15.18 34.55,14.66 35.02,14.53 C36.89,13.92 38.71,13.62 40.48,13.63 Z M25.77,30.92 C26.02,30.92 26.26,30.99 26.45,31.18 C29.86,34.59 31.29,41.22 27.33,48.51 C27.05,49.04 27.39,49.69 27.98,49.72 C32.84,50.00 42.27,51.58 48.19,59.61 C48.41,59.89 48.78,60.01 49.12,59.86 C52.63,58.52 56.34,58.00 59.85,58.37 C60.25,58.41 60.60,58.09 60.60,57.68 C60.60,55.73 61.61,52.92 65.64,51.40 C66.14,51.21 66.67,51.49 66.82,51.99 C66.98,52.45 66.69,52.95 66.23,53.13 C61.61,54.90 62.45,58.28 62.48,58.40 C62.55,58.68 62.76,58.86 63.01,58.93 C66.54,59.89 69.45,61.75 71.09,64.19 C71.37,64.60 71.32,65.19 70.94,65.47 C70.78,65.60 70.63,65.66 70.45,65.66 C70.14,65.69 69.83,65.53 69.62,65.25 C66.51,60.57 57.55,58.03 48.53,62.06 C48.13,62.25 47.67,62.09 47.42,61.71 C40.13,50.49 25.10,51.52 24.94,51.52 L23.14,51.46 C22.92,51.33 22.74,51.11 22.67,50.87 C21.96,47.82 18.55,43.67 13.62,41.87 C13.22,41.72 12.90,41.32 12.97,40.86 C13.06,40.27 13.65,39.92 14.18,40.11 C16.29,40.85 18.52,42.28 20.35,43.95 C21.50,45.01 22.86,46.56 23.76,48.48 C24.04,49.04 24.82,49.11 25.15,48.58 C29.34,41.76 28.22,35.55 25.18,32.51 C24.84,32.18 24.79,31.59 25.13,31.25 C25.29,31.05 25.53,30.94 25.77,30.92 Z M13.19,68.26 C11.51,76.79 23.55,84.41 33.31,81.50 C32.78,85.56 29.21,91.57 29.21,91.57 L36.44,93.07 L50.98,78.45 C43.17,77.06 39.13,74.58 37.00,73.16 C36.00,72.47 34.83,72.16 33.65,72.26 C31.79,72.41 28.94,72.50 25.59,72.07 C22.12,71.64 17.68,70.62 13.19,68.26 Z"/><path id="Dingbat_X" transform="translate(51.56,206.32)" fill="#ED220D" fill-rule="evenodd" d="M105.33,0.00 C104.42,0.03 103.51,0.73 102.00,2.09 C87.39,15.23 73.55,29.14 60.57,43.90 C59.78,44.80 58.91,45.65 57.92,46.70 C57.04,45.45 56.32,44.47 55.65,43.46 C50.30,35.36 45.01,27.21 39.57,19.17 C37.41,15.96 34.88,12.98 32.57,9.87 C31.47,8.38 30.08,8.34 28.48,8.74 C26.87,9.15 25.93,10.24 25.92,11.77 C25.88,14.16 24.56,15.24 22.52,15.89 C21.12,14.85 19.75,13.83 18.19,12.67 C16.50,14.48 15.02,16.14 13.45,17.73 C12.05,19.13 12.00,20.56 12.60,22.42 C17.95,39.09 24.81,55.10 33.20,70.47 C33.63,71.26 34.01,72.08 34.41,72.85 C22.84,86.42 11.40,99.86 0.00,113.25 C0.94,115.47 1.68,117.37 2.54,119.21 C3.16,120.52 3.22,121.73 2.50,123.00 C2.00,123.90 1.56,124.81 1.21,125.77 C1.01,126.30 0.78,127.03 0.99,127.48 C2.61,131.16 4.95,134.28 7.94,136.70 C9.42,136.08 10.51,135.50 11.68,135.16 C13.01,134.77 14.15,135.60 13.73,136.81 C12.82,139.48 14.71,140.79 16.02,142.38 C17.09,143.66 18.83,143.64 20.03,142.45 C20.46,142.02 20.77,141.48 21.15,140.99 C30.52,128.74 39.91,116.48 49.30,104.23 C49.97,103.36 50.71,102.56 51.67,101.43 C52.58,102.82 53.31,103.89 54.01,104.98 C59.58,113.69 65.62,122.05 72.27,129.97 C74.17,132.24 75.45,132.46 77.71,130.64 C79.45,129.24 80.97,127.59 82.65,126.00 C84.56,127.18 86.53,128.38 88.48,129.58 C89.63,128.63 90.47,127.91 91.35,127.21 C92.64,126.18 93.65,125.17 93.87,123.28 C94.08,121.37 95.13,119.61 97.33,119.03 C99.02,118.58 100.14,117.38 101.03,115.98 C102.44,113.74 103.53,111.34 104.03,108.94 C94.32,96.64 84.77,84.54 75.14,72.33 C76.19,70.94 76.86,70.05 77.55,69.16 C89.24,54.13 101.85,39.91 115.26,26.40 C116.89,24.74 118.47,23.09 119.64,20.97 C121.87,16.92 121.96,17.06 119.30,13.48 C118.32,12.15 117.23,11.81 115.67,11.79 C112.70,11.73 111.34,9.89 111.83,7.08 C111.94,6.46 111.82,5.63 111.47,5.14 C110.65,3.98 109.73,2.85 108.66,1.92 C107.15,0.61 106.24,-0.03 105.33,0.00 Z"/></g>
+    <g id="gc" class="hide"><path id="Hand" transform="translate(55.61,495.00)" fill="#000000" fill-rule="evenodd" d="M28.40,0.00 C26.50,0.01 24.61,1.39 24.59,4.08 C24.58,6.33 24.36,38.39 24.36,38.39 C24.36,38.39 23.04,38.67 22.74,38.67 C22.74,38.67 17.83,11.10 17.44,8.12 C16.78,3.02 10.02,3.68 10.51,9.14 C10.71,11.49 14.25,41.46 14.25,41.46 L12.60,42.28 C12.60,42.28 7.82,26.77 6.53,22.10 C5.17,17.21 -1.00,19.03 0.14,24.03 C0.63,26.17 2.86,39.02 5.20,48.64 C4.95,69.44 10.11,73.94 11.29,81.99 C11.98,86.68 11.65,93.07 11.65,93.07 L40.86,93.07 C40.86,79.09 53.05,71.01 55.87,64.70 C55.96,64.48 60.29,54.23 62.06,50.02 C62.55,48.87 62.82,47.64 62.86,46.40 C62.95,44.01 63.17,40.00 63.71,38.90 C65.37,35.54 65.23,33.00 60.88,34.16 C55.68,35.54 53.55,44.85 53.55,44.85 L49.29,52.25 L46.95,53.06 L44.62,40.58 C44.62,40.58 45.78,12.86 46.12,8.45 C46.46,3.93 40.00,3.05 39.26,7.72 C38.84,10.44 35.53,33.82 34.82,38.02 L33.18,37.92 C33.18,37.92 32.38,6.48 32.30,4.12 C32.21,1.35 30.29,-0.01 28.40,0.00 Z"/><path id="Foot" transform="translate(43.46,412.30)" fill="#000000" fill-rule="evenodd" d="M3.91,0.00 C3.91,0.00 5.45,29.05 4.42,35.94 C3.39,42.83 0.00,51.16 0.00,55.29 C0.00,59.43 0.86,67.90 12.05,67.90 C22.78,67.90 24.93,61.66 36.74,64.21 C48.02,66.65 52.34,67.90 61.30,67.90 C65.73,67.90 70.28,65.76 72.58,65.76 C74.93,65.76 77.96,67.90 81.40,67.90 C87.42,67.90 90.61,63.57 88.19,58.92 C84.23,58.58 82.10,58.41 82.10,58.41 C82.10,58.41 82.04,56.50 78.18,56.16 C73.70,55.78 69.99,54.37 66.39,52.76 C61.52,50.57 57.38,44.96 40.06,37.94 C31.80,34.96 28.75,28.78 32.67,0.00 C25.26,0.00 3.91,0.00 3.91,0.00 Z"/><path id="Dingbat_Check" transform="translate(51.57,421.89)" fill="#60D937" fill-rule="evenodd" d="M92.39,0.03 C90.34,-1.47 39.73,55.46 30.68,66.75 C30.21,67.34 29.69,67.90 29.09,68.59 C28.47,67.85 27.97,67.28 27.49,66.68 C23.71,61.89 21.30,58.07 17.47,53.32 C15.94,51.42 14.20,49.69 12.58,47.85 C11.81,46.98 10.91,47.01 9.89,47.32 C8.87,47.64 7.52,47.64 6.22,48.45 C5.78,48.98 6.36,49.82 6.44,50.64 C6.54,51.65 2.88,51.51 0.97,52.79 C0.53,53.09 1.37,54.29 1.08,54.60 C0.24,55.53 -0.29,55.31 0.17,56.44 C4.28,66.54 10.42,75.09 15.37,85.33 C23.24,101.62 24.74,91.48 27.01,93.43 C34.01,99.45 30.93,101.09 47.40,80.04 C54.36,70.26 90.81,24.83 98.94,15.91 C99.94,14.82 100.89,13.74 101.56,12.38 C102.84,9.78 102.90,9.86 101.04,7.75 C100.35,6.97 99.64,6.81 98.63,6.86 C96.71,6.95 95.76,5.86 95.96,4.10 C96.01,3.71 95.91,3.21 95.66,2.92 C95.08,2.24 93.12,0.56 92.39,0.03 Z"/></g>
+  </svg>
+  <h1>Misconception: Frame of reference</h1>
+  <div class="quote hide" id="qx">“I’m being thrown backward”</div>
+  <div class="quote hide" id="qc">“I feel a force pulling me forward”</div>
+</div>
+<div id="hint">click / → next &nbsp;·&nbsp; ← back &nbsp;·&nbsp; space pause &nbsp;·&nbsp; R replay</div>
+
+<script>
+(() => {
+const SW = 1024, SH = 768;
+const FONT = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+const RED = '#e8312f', GREEN = '#2fa31f';
+const PREV = 'newton-first-law-car-turn.html', NEXT = 'newton-second-law.html', LAST_BUILD = 2;
+
+// ---------- Scene geometry (stage px) ----------
+const VIEW = {x: 470, y: 200, w: 544, h: 462};          // framed picture area (like the photo on the slide)
+const CAR_W = 340, ROOF = 272, CEIL = 292, FLOOR = 560, UNDER = 596, RAIL = 622;
+const CAR0 = 500;                                       // car's back end at rest
+const WALL = 10;                                        // end-wall thickness
+const YOU0 = 150;                                       // your position in the car (from its back end)
+const HALF = 22;                                        // half-width of you (dress hem)
+const STRAPS = [95, 172, 250];                          // strap pivots along the overhead bar (car coords)
+const HELD = 1;                                         // index of the strap you hold
+const ACC = 28;                                         // car's acceleration, px/s^2 (constant)
+const GAP = YOU0 - HALF - WALL;                         // distance from your back to the back wall
+const T_END = Math.sqrt(2 * GAP / ACC);                 // time for the back wall to reach you (no forces)
+
+// ---------- State ----------
+let build = 0, t = 0, running = false, paused = false;
+
+function enter(b) {
+  build = Math.max(0, Math.min(LAST_BUILD, b));
+  t = 0; paused = false; running = build > 0;
+  reveal();
+}
+function step(dt) {
+  if (!running || paused) return;
+  t = Math.min(T_END, t + dt);
+  if (t >= T_END) { running = false; reveal(); }
+}
+function reveal() {
+  const done = !running && t >= T_END;
+  const showX = build >= 2 || (build === 1 && done);
+  const showC = build === 2 && done;
+  for (const id of ['gx', 'qx']) document.getElementById(id).classList.toggle('hide', !showX);
+  for (const id of ['gc', 'qc']) document.getElementById(id).classList.toggle('hide', !showC);
+}
+
+// ---------- Drawing ----------
+const cv = document.getElementById('cv'), g = cv.getContext('2d');
+let scale = 1;
+function layout() {
+  const W = innerWidth, H = innerHeight;
+  scale = Math.min(W / SW, H / SH);
+  const st = document.getElementById('stage');
+  st.style.transform = `scale(${scale})`;
+  st.style.left = (W - SW * scale) / 2 + 'px';
+  st.style.top = (H - SH * scale) / 2 + 'px';
+  const dpr = devicePixelRatio || 1;
+  cv.width = Math.round(SW * scale * dpr); cv.height = Math.round(SH * scale * dpr);
+}
+
+function arrow(x1, y1, x2, y2, color, lw, dashed) {
+  const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy);
+  if (L < 6) return;
+  const ux = dx / L, uy = dy / L, h = Math.max(10, lw * 3.2);
+  g.save(); g.strokeStyle = g.fillStyle = color; g.lineWidth = lw; g.lineCap = 'butt';
+  if (dashed) g.setLineDash([lw * 2.2, lw * 1.6]);
+  g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2 - ux * h * 0.9, y2 - uy * h * 0.9); g.stroke();
+  g.setLineDash([]);
+  g.beginPath(); g.moveTo(x2, y2);
+  g.lineTo(x2 - ux * h - uy * h * 0.6, y2 - uy * h + ux * h * 0.6);
+  g.lineTo(x2 - ux * h + uy * h * 0.6, y2 - uy * h - ux * h * 0.6);
+  g.closePath(); g.fill(); g.restore();
+}
+// text block; (x,y) = anchor, ax/ay in {-1,0,1}: which side of the anchor the text sits on
+function label(text, x, y, color, size, ax, ay, alpha, font) {
+  g.save(); g.globalAlpha = alpha == null ? 1 : alpha;
+  g.font = font || `${size}px ${FONT}`; g.fillStyle = color; g.textBaseline = 'middle';
+  const lines = text.split('\n'), lh = size * 1.15;
+  const w = Math.max(...lines.map(l => g.measureText(l).width)), h = lines.length * lh;
+  let cx = x + ax * w / 2, cy = y + ay * h / 2;
+  cx = Math.min(SW - 10 - w / 2, Math.max(10 + w / 2, cx));
+  g.textAlign = 'left'; g.lineJoin = 'round'; g.strokeStyle = '#fff'; g.lineWidth = 7;
+  lines.forEach((l, i) => g.strokeText(l, cx - w / 2, cy - h / 2 + lh * (i + 0.5)));
+  lines.forEach((l, i) => g.fillText(l, cx - w / 2, cy - h / 2 + lh * (i + 0.5)));
+  g.restore();
+  return {cx, cy, w, h};
+}
+
+// Station seen behind the car: pale wall with pillars fixed to the ground
+const PILLARS = []; for (let x = VIEW.x + 20; x < VIEW.x + VIEW.w; x += 92) PILLARS.push(x);
+function drawStation(clipRects) {
+  g.save();
+  if (clipRects) { g.beginPath(); clipRects.forEach(r => g.rect(...r)); g.clip(); }
+  g.fillStyle = '#eef0f3'; g.fillRect(VIEW.x, VIEW.y, VIEW.w, RAIL - VIEW.y);
+  g.strokeStyle = '#dde1e6'; g.lineWidth = 1;                    // wall tiles
+  for (let y = VIEW.y + 18; y < RAIL; y += 22) { g.beginPath(); g.moveTo(VIEW.x, y); g.lineTo(VIEW.x + VIEW.w, y); g.stroke(); }
+  for (const x of PILLARS) {
+    g.fillStyle = '#8f99a5'; g.fillRect(x - 13, VIEW.y, 26, RAIL - VIEW.y);
+    g.fillStyle = '#b4bcc6'; g.fillRect(x - 13, VIEW.y, 7, RAIL - VIEW.y);
+  }
+  g.restore();
+}
+function drawGround() {
+  g.fillStyle = '#cfc9bf'; g.fillRect(VIEW.x, RAIL, VIEW.w, VIEW.y + VIEW.h - RAIL);
+  g.fillStyle = '#6f6357';
+  for (let x = VIEW.x + 4; x < VIEW.x + VIEW.w; x += 34) g.fillRect(x, RAIL + 2, 18, 8);
+  g.fillStyle = '#555'; g.fillRect(VIEW.x, RAIL - 3, VIEW.w, 5);
+}
+
+function drawStrap(px, tiltDeg, hand) {         // px = pivot x on the bar; hand = {x,y} if held
+  const py = CEIL + 14;
+  g.save();
+  g.fillStyle = '#ddd'; g.strokeStyle = '#777'; g.lineWidth = 1.5;
+  g.fillRect(px - 7, py - 6, 14, 12); g.strokeRect(px - 7, py - 6, 14, 12);
+  let hx, hy;
+  if (hand) { hx = hand.x; hy = hand.y; }
+  else { const a = tiltDeg * Math.PI / 180, L = 48; hx = px - Math.sin(a) * L; hy = py + Math.cos(a) * L; }
+  g.strokeStyle = '#9a9a9a'; g.lineWidth = 5;
+  g.beginPath(); g.moveTo(px, py + 5); g.lineTo(hx, hy - 10); g.stroke();
+  g.strokeStyle = '#c0262d'; g.lineWidth = 5; g.lineJoin = 'round';
+  const ang = Math.atan2(hx - px, hy - py);
+  g.translate(hx, hy); g.rotate(-ang);
+  g.beginPath(); g.moveTo(-3, -10); g.lineTo(-12, 8); g.lineTo(12, 8); g.lineTo(3, -10); g.closePath(); g.stroke();
+  g.restore();
+}
+
+function drawCar(xc, slippery) {
+  // end walls are the poles (white with red section, like the photo)
+  g.fillStyle = '#fbfbfb'; g.fillRect(xc, CEIL, CAR_W, FLOOR - CEIL);       // far wall of the car
+  // windows show the station behind
+  const wins = [[xc + 28, 336, 84, 96], [xc + 128, 336, 84, 96], [xc + 228, 336, 84, 96]];
+  drawStation(wins);
+  g.save(); g.strokeStyle = '#9aa3ad'; g.lineWidth = 3;
+  wins.forEach(r => g.strokeRect(...r)); g.restore();
+  // roof / ceiling
+  const grd = g.createLinearGradient(0, ROOF, 0, CEIL);
+  grd.addColorStop(0, '#c9ced4'); grd.addColorStop(1, '#eceef0');
+  g.fillStyle = grd; g.fillRect(xc - 4, ROOF, CAR_W + 8, CEIL - ROOF);
+  // floor + undercarriage + wheels
+  g.fillStyle = slippery ? '#a9d8f0' : '#6b6b6b'; g.fillRect(xc - 4, FLOOR, CAR_W + 8, 14);
+  if (slippery) { g.fillStyle = 'rgba(255,255,255,0.7)'; for (let x = xc + 20; x < xc + CAR_W - 20; x += 46) g.fillRect(x, FLOOR + 3, 22, 3); }
+  g.fillStyle = '#3d3d3d'; g.fillRect(xc - 4, FLOOR + 14, CAR_W + 8, UNDER - FLOOR - 14);
+  g.fillStyle = '#222';
+  for (const wx of [44, 82, 258, 296]) { g.beginPath(); g.arc(xc + wx, RAIL - 13, 13, 0, 2 * Math.PI); g.fill(); }
+  g.fillStyle = '#888';
+  for (const wx of [44, 82, 258, 296]) { g.beginPath(); g.arc(xc + wx, RAIL - 13, 4, 0, 2 * Math.PI); g.fill(); }
+  // overhead bar
+  g.fillStyle = '#f2f2f2'; g.strokeStyle = '#888'; g.lineWidth = 1.5;
+  g.fillRect(xc + WALL, CEIL + 4, CAR_W - 2 * WALL, 7); g.strokeRect(xc + WALL, CEIL + 4, CAR_W - 2 * WALL, 7);
+  // end poles
+  for (const ex of [xc, xc + CAR_W - WALL]) {
+    g.fillStyle = '#fafafa'; g.strokeStyle = '#777'; g.lineWidth = 1.5;
+    g.fillRect(ex, CEIL, WALL, FLOOR - CEIL); g.strokeRect(ex, CEIL, WALL, FLOOR - CEIL);
+    g.fillStyle = '#c0262d'; g.fillRect(ex + 2, 360, WALL - 4, 150);
+  }
+}
+
+function drawYou(x, holding, hand) {            // x = your center (stage px), facing right (forward)
+  const SKIN = '#f1c19d', SKIN_D = '#c98f68', DRESS = '#1f4fa0', HAIR = '#1b1b1b';
+  g.save(); g.lineCap = 'round'; g.lineJoin = 'round';
+  // legs + shoes
+  g.strokeStyle = SKIN; g.lineWidth = 8;
+  g.beginPath(); g.moveTo(x - 6, 500); g.lineTo(x - 9, 552); g.moveTo(x + 6, 500); g.lineTo(x + 7, 552); g.stroke();
+  g.fillStyle = '#1d3f8a';
+  g.beginPath(); g.ellipse(x - 6, 555, 11, 5, 0, 0, 2 * Math.PI); g.ellipse(x + 11, 555, 11, 5, 0, 0, 2 * Math.PI); g.fill();
+  // back arm (down, by your side)
+  g.strokeStyle = SKIN_D; g.lineWidth = 7;
+  g.beginPath(); g.moveTo(x - 8, 424); g.lineTo(x - 12, 462); g.lineTo(x - 8, 492); g.stroke();
+  // dress
+  g.fillStyle = DRESS;
+  g.beginPath(); g.moveTo(x - 13, 418); g.lineTo(x + 13, 418); g.lineTo(x + HALF, 508); g.lineTo(x - HALF, 508); g.closePath(); g.fill();
+  // neck + head + hair
+  g.fillStyle = SKIN; g.fillRect(x - 4, 406, 8, 14);
+  g.beginPath(); g.arc(x + 2, 396, 14, 0, 2 * Math.PI); g.fill();
+  g.fillStyle = HAIR;
+  g.beginPath(); g.arc(x, 393, 15, Math.PI * 0.55, Math.PI * 1.75); g.lineTo(x + 4, 384); g.closePath(); g.fill();
+  g.fillRect(x - 15, 393, 9, 24);
+  g.fillStyle = '#222'; g.beginPath(); g.arc(x + 10, 395, 1.8, 0, 2 * Math.PI); g.fill();      // eye
+  // front arm: up to the strap, or down
+  g.strokeStyle = SKIN; g.lineWidth = 7;
+  g.beginPath(); g.moveTo(x + 6, 424);
+  if (holding) { g.lineTo(x + 16, 392); g.lineTo(hand.x, hand.y); }
+  else { g.lineTo(x + 10, 462); g.lineTo(x + 16, 490); }
+  g.stroke();
+  g.restore();
+}
+
+function draw() {
+  const dpr = devicePixelRatio || 1;
+  g.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+  g.clearRect(0, 0, SW, SH);
+
+  const moving = build > 0;
+  const shift = moving ? 0.5 * ACC * t * t : 0;         // how far the car has moved
+  const xc = CAR0 + shift;
+  const youX = CAR0 + YOU0 + (build === 2 ? shift : 0);  // build 1: nothing pushes you, you stay put
+  const holding = build !== 1;
+  const tilt = moving ? 13 * Math.min(1, t / 0.35) : 0;  // free straps hang tilted back while accelerating
+
+  g.save();
+  g.beginPath(); g.rect(VIEW.x, VIEW.y, VIEW.w, VIEW.h); g.clip();
+  drawStation(); drawGround();
+  // ground marker under where you started
+  g.fillStyle = '#f08a00';
+  g.beginPath(); g.moveTo(CAR0 + YOU0, RAIL + 12); g.lineTo(CAR0 + YOU0 - 9, RAIL + 30); g.lineTo(CAR0 + YOU0 + 9, RAIL + 30); g.closePath(); g.fill();
+  drawCar(xc, build === 1);
+  const hand = {x: xc + STRAPS[HELD] - 8, y: CEIL + 66};
+  STRAPS.forEach((sx, i) => drawStrap(xc + sx, tilt, holding && i === HELD ? hand : null));
+  drawYou(youX, holding, hand);
+  g.restore();
+  g.strokeStyle = '#9a9a9a'; g.lineWidth = 1.5; g.strokeRect(VIEW.x, VIEW.y, VIEW.w, VIEW.h);
+
+  if (moving) {
+    const ax = xc + 190, ay = 238;
+    arrow(ax, ay, ax + 80, ay, RED, 9);
+    label('acceleration', ax - 12, ay, '#000', 28, -1, 0);
+  }
+  if (build === 2) {
+    const fF = `italic 700 34px "Times New Roman", Times, serif`;
+    arrow(hand.x + 6, hand.y + 8, hand.x + 62, hand.y + 8, GREEN, 6);
+    label('F', hand.x + 38, hand.y + 36, GREEN, 34, 0, 0, 1, fF);
+    arrow(youX + 22, FLOOR - 2, youX + 92, FLOOR - 2, GREEN, 6);
+    label('F', youX + 60, FLOOR - 28, GREEN, 34, 0, 0, 1, fF);
+  }
+}
+
+// ---------- Loop & input ----------
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  step(dt); draw();
+  requestAnimationFrame(loop);
+}
+function next() { if (build === LAST_BUILD) { if (NEXT) location.href = NEXT; } else enter(build + 1); }
+function back() { if (build === 0) location.href = PREV + '#build=last'; else enter(build - 1); }
+// touch: swipe left = next, swipe right = back (tap = next via click)
+let tX0 = null, tY0 = null;
+addEventListener('touchstart', e => { tX0 = e.touches[0].clientX; tY0 = e.touches[0].clientY; }, {passive: true});
+addEventListener('touchend', e => {
+  if (tX0 == null) return;
+  const dx = e.changedTouches[0].clientX - tX0, dy = e.changedTouches[0].clientY - tY0; tX0 = null;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) { e.preventDefault(); (dx < 0 ? next : back)(); }
+});
+addEventListener('keydown', e => {
+  if (['ArrowRight', 'PageDown', 'ArrowDown', 'Enter', 'n'].includes(e.key)) { e.preventDefault(); next(); }
+  else if (['ArrowLeft', 'PageUp', 'ArrowUp', 'Backspace', 'p'].includes(e.key)) { e.preventDefault(); back(); }
+  else if (e.key === ' ') { e.preventDefault(); paused = !paused; }
+  else if (e.key === 'r' || e.key === 'R') enter(build);
+  showHint();
+});
+addEventListener('click', next);
+addEventListener('contextmenu', e => { e.preventDefault(); back(); });
+const hint = document.getElementById('hint'); let hintT;
+function showHint() { hint.style.opacity = 1; clearTimeout(hintT); hintT = setTimeout(() => hint.style.opacity = 0, 2500); }
+addEventListener('mousemove', showHint);
+addEventListener('resize', layout);
+
+// #build=N&t=T jumps to a build and fast-forwards; #build=last shows the finished last build
+const h = new URLSearchParams(location.hash.slice(1));
+layout();
+if (h.get('build') === 'last') { enter(LAST_BUILD); while (running) step(1 / 240); }
+else {
+  enter(+(h.get('build') || 0));
+  if (h.has('t')) for (let i = 0; i < +h.get('t') * 240; i++) step(1 / 240);
+}
+showHint();
+setTimeout(() => document.body.classList.remove('notrans'), 300);   // no fade-in when the slide first opens
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

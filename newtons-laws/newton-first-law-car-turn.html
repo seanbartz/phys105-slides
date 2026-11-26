@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>First Law — Inertia</title>
+<!--
+  Builds (clicker / → / PageDown / click = next,  ← / PageUp = back):
+    0  Road and car, waiting
+    1  Car drives the curve with NO forces on you: you go straight, the car turns away
+    2  Replay with the car holding you: stops at the first bend with the forces drawn
+    3  Continue through the rest of the curve, forces shown live
+  Space = pause/resume,  R = replay current build
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #fff; overflow: hidden; }
+  body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #000; cursor: default; }
+  #stage { position: absolute; width: 1024px; height: 768px; transform-origin: 0 0; }
+  #cv { position: absolute; left: 0; top: 0; width: 1024px; height: 768px; }
+  h1 { position: absolute; left: 58px; top: 22px; margin: 0; font-size: 66px; font-weight: 700; letter-spacing: -1px; }
+  h2 { position: absolute; left: 60px; top: 122px; margin: 0; font-size: 34px; font-weight: 700; }
+  ul { position: absolute; left: 60px; top: 262px; width: 400px; margin: 0; padding-left: 36px; font-size: 30px; line-height: 1.2; }
+  #hint { position: fixed; right: 14px; bottom: 10px; font-size: 14px; color: #9ca3af; transition: opacity .6s; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv"></canvas>
+  <h1>First Law</h1>
+  <h2>Inertia</h2>
+  <ul><li>There doesn’t have to be a force in the direction of motion!</li></ul>
+</div>
+<div id="hint">click / → next &nbsp;·&nbsp; ← back &nbsp;·&nbsp; space pause &nbsp;·&nbsp; R replay</div>
+
+<script>
+(() => {
+const SW = 1024, SH = 768;
+const FONT = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+const RED = '#e8312f', PINK = '#e6007e', YOU = '#0b7a75', GRAY = '#555';
+
+// ---------- Road: vertical S-curve built from circular arcs, car drives bottom → top ----------
+// Arcs: right α, LEFT 2α (bulge to the right, like the original slide), right 2α, left α.
+const X0 = 760, R_TURN = 100, ALPHA = 65 * Math.PI / 180, Y_CURVE0 = 690, ROAD_W = 92;
+const pts = [];
+let ARC = [];                                   // arc-length boundaries of the 4 bends
+{
+  const ds = 0.5, k = 1 / R_TURN, a = ALPHA / k;
+  const lens = [a, 2 * a, 2 * a, a], sgn = [1, -1, 1, -1];      // +1 = right turn
+  const sStraight = (SH + 60) - Y_CURVE0;
+  ARC = [sStraight]; lens.forEach(L => ARC.push(ARC[ARC.length - 1] + L));
+  const kappaRaw = s => { for (let i = 0; i < 4; i++) if (s >= ARC[i] && s < ARC[i + 1]) return sgn[i] * k; return 0; };
+  const RAMP = 30;                               // smooth the curvature jumps a little
+  const kappa = s => { let t = 0; for (let j = -4; j <= 4; j++) t += kappaRaw(s + j * RAMP / 8); return t / 9; };
+  // start offset so the whole curve is centered on X0
+  let x = 0, y = SH + 60, phi = 0, S = 0;
+  const raw = [];
+  while (y > -60) {
+    raw.push({x, y, s: S, phi, k: kappa(S)});
+    phi += kappa(S) * ds; x += Math.sin(phi) * ds; y -= Math.cos(phi) * ds; S += ds;
+  }
+  const xs = raw.map(p => p.x), mid = (Math.min(...xs) + Math.max(...xs)) / 2;
+  for (const p of raw) {
+    const tx = Math.sin(p.phi), ty = -Math.cos(p.phi);
+    // curvature vector toward the center: right turn (k>0) → rotate tangent clockwise on screen
+    pts.push({x: X0 + p.x - mid, y: p.y, s: p.s, tx, ty, kx: -ty * p.k, ky: tx * p.k});
+  }
+}
+function at(s) {
+  let lo = 0, hi = pts.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (pts[m].s <= s) lo = m; else hi = m; }
+  const a = pts[lo], b = pts[hi], f = (s - a.s) / ((b.s - a.s) || 1), mix = k => a[k] + (b[k] - a[k]) * f;
+  return {x: mix('x'), y: mix('y'), tx: mix('tx'), ty: mix('ty'), kx: mix('kx'), ky: mix('ky')};
+}
+function sAtY(y) {
+  let best = 0;
+  pts.forEach((p, i) => { if (Math.abs(p.y - y) < Math.abs(pts[best].y - y)) best = i; });
+  return pts[best].s;
+}
+const S_START = sAtY(SH - 70);
+const S_APEX  = (ARC[1] + ARC[2]) / 2;                 // middle of the first LEFT turn (as in the original slide)
+const S_END   = sAtY(95);
+const V = 165;                                          // px per second
+
+// ---------- State ----------
+let build = 0, s = S_START, running = false, paused = false, stopAt = S_END;
+let free = false, P = {x: 0, y: 0}, PV = {x: 0, y: 0}, P0 = null;
+
+function enter(b) {
+  build = Math.max(0, Math.min(3, b));
+  paused = false;
+  if (build === 0) { s = S_START; running = false; free = false; }
+  if (build === 1) { s = S_START; free = true; running = true; stopAt = S_END;
+                     const c = at(s); P = {x: c.x, y: c.y}; P0 = {...P}; PV = {x: V * c.tx, y: V * c.ty}; }
+  if (build === 2) { s = S_START; free = false; running = true; stopAt = S_APEX; }
+  if (build === 3) { s = S_APEX; free = false; running = true; stopAt = S_END; }
+}
+function step(dt) {
+  if (!running || paused) return;
+  s = Math.min(stopAt, s + V * dt);
+  if (free) { P.x += PV.x * dt; P.y += PV.y * dt; if (P.y < 70) running = false; }
+  if (s >= stopAt) running = false;
+}
+
+// ---------- Drawing ----------
+const cv = document.getElementById('cv'), g = cv.getContext('2d');
+let scale = 1;
+function layout() {
+  const W = innerWidth, H = innerHeight;
+  scale = Math.min(W / SW, H / SH);
+  const st = document.getElementById('stage');
+  st.style.transform = `scale(${scale})`;
+  st.style.left = (W - SW * scale) / 2 + 'px';
+  st.style.top = (H - SH * scale) / 2 + 'px';
+  const dpr = devicePixelRatio || 1;
+  cv.width = Math.round(SW * scale * dpr); cv.height = Math.round(SH * scale * dpr);
+}
+
+function arrow(x1, y1, x2, y2, color, lw, dashed) {
+  const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy);
+  if (L < 6) return;
+  const ux = dx / L, uy = dy / L, h = Math.max(10, lw * 3.2);
+  g.save(); g.strokeStyle = g.fillStyle = color; g.lineWidth = lw; g.lineCap = 'butt';
+  if (dashed) g.setLineDash([lw * 2.2, lw * 1.6]);
+  g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2 - ux * h * 0.9, y2 - uy * h * 0.9); g.stroke();
+  g.setLineDash([]);
+  g.beginPath(); g.moveTo(x2, y2);
+  g.lineTo(x2 - ux * h - uy * h * 0.6, y2 - uy * h + ux * h * 0.6);
+  g.lineTo(x2 - ux * h + uy * h * 0.6, y2 - uy * h - ux * h * 0.6);
+  g.closePath(); g.fill(); g.restore();
+}
+// text block; (x,y) = anchor, ax/ay in {-1,0,1}: which side of the anchor the text sits on
+function label(text, x, y, color, size, ax, ay, alpha) {
+  g.save(); g.globalAlpha = alpha == null ? 1 : alpha;
+  g.font = `${size}px ${FONT}`; g.fillStyle = color; g.textBaseline = 'middle';
+  const lines = text.split('\n'), lh = size * 1.15;
+  const w = Math.max(...lines.map(l => g.measureText(l).width)), h = lines.length * lh;
+  let cx = x + ax * w / 2, cy = y + ay * h / 2;
+  cx = Math.min(SW - 10 - w / 2, Math.max(10 + w / 2, cx));
+  g.textAlign = 'left'; g.lineJoin = 'round'; g.strokeStyle = '#fff'; g.lineWidth = 7;
+  lines.forEach((l, i) => g.strokeText(l, cx - w / 2, cy - h / 2 + lh * (i + 0.5)));
+  lines.forEach((l, i) => g.fillText(l, cx - w / 2, cy - h / 2 + lh * (i + 0.5)));
+  g.restore();
+  return {cx, cy, w, h};
+}
+
+function roadPath() { g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); }
+function drawRoad() {
+  g.save();
+  g.shadowColor = 'rgba(0,0,0,0.35)'; g.shadowBlur = 10; g.shadowOffsetX = 3; g.shadowOffsetY = 3;
+  roadPath(); g.strokeStyle = '#000'; g.lineWidth = ROAD_W; g.lineJoin = 'round'; g.stroke();
+  g.restore();
+  g.save();
+  roadPath(); g.strokeStyle = '#f5c400'; g.lineWidth = 4; g.setLineDash([16, 14]); g.stroke();
+  g.restore();
+}
+function drawCar(c) {
+  const ang = Math.atan2(c.ty, c.tx) + Math.PI / 2;      // car art drawn pointing "up"
+  const L = 66, W = 36;
+  g.save(); g.translate(c.x, c.y); g.rotate(ang);
+  g.fillStyle = '#222';
+  for (const [x, y] of [[-W / 2 - 3, -L * 0.3], [W / 2 - 3, -L * 0.3], [-W / 2 - 3, L * 0.18], [W / 2 - 3, L * 0.18]])
+    g.fillRect(x, y, 6, 14);
+  g.fillStyle = PINK; g.strokeStyle = '#8a004b'; g.lineWidth = 1.5;
+  g.beginPath(); g.roundRect(-W / 2, -L / 2, W, L, 11); g.fill(); g.stroke();
+  g.fillStyle = '#e6e6e6';
+  g.beginPath(); g.roundRect(-W / 2 + 6, -L / 2 + 12, W - 12, 9, 4); g.fill();   // windshield
+  g.beginPath(); g.roundRect(-W / 2 + 7, L / 2 - 15, W - 14, 7, 3); g.fill();    // rear window
+  g.fillStyle = '#fff59d';
+  g.fillRect(-W / 2 + 4, -L / 2 + 1, 6, 3); g.fillRect(W / 2 - 10, -L / 2 + 1, 6, 3);
+  g.restore();
+}
+function drawYou(x, y) {
+  g.save();
+  g.fillStyle = YOU; g.strokeStyle = '#fff'; g.lineWidth = 3;
+  g.beginPath(); g.arc(x, y, 10, 0, 2 * Math.PI); g.fill(); g.stroke();
+  g.restore();
+}
+
+function draw() {
+  const dpr = devicePixelRatio || 1;
+  g.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+  g.clearRect(0, 0, SW, SH);
+  drawRoad();
+  const c = at(s);
+
+  if (build <= 1) {
+    const sep = free ? Math.hypot(P.x - c.x, P.y - c.y) : 0;
+    const you = free ? P : {x: c.x, y: c.y + 4};
+    if (free && sep > 30) {                               // you keep going straight
+      arrow(P0.x, P0.y, P.x, P.y + 14, 'rgba(11,122,117,0.6)', 4, true);
+      arrow(P.x, P.y, P.x + (PV.x / V) * 90, P.y + (PV.y / V) * 90, RED, 6, true);
+      label('Your\ninertial path', P0.x - 22, Math.max(P.y + 60, 300), GRAY, 28, -1, 0);
+    }
+    drawCar(c);
+    drawYou(you.x, you.y);
+    label('You', you.x + (sep > 30 ? 18 : 30), you.y, YOU, 30, 1, 0);
+    return;
+  }
+
+  // builds 2 & 3: the car holds you; show the forces
+  const k = Math.hypot(c.kx, c.ky), nx = c.kx / (k || 1), ny = c.ky / (k || 1);
+  const strength = Math.min(1, k * R_TURN * 1.25);              // fades in/out with how sharp the turn is
+  const outside = nx < 0 ? 1 : -1;                      // screen side away from the center of the turn
+
+  // your inertial path: straight ahead along the car's current velocity
+  const fx = c.x + c.tx * 34, fy = c.y + c.ty * 34;
+  arrow(fx, fy, fx + c.tx * 150, fy + c.ty * 150, RED, 6, true);
+  label('Your\ninertial path', fx + c.tx * 150 + outside * 18, fy + c.ty * 150 + 10, GRAY, 28, outside, 0);
+
+  drawCar(c);
+  drawYou(c.x, c.y + 4);
+
+  if (strength > 0.05) {
+    const F = Math.min(150, V * V * k * 0.5);
+    arrow(c.x, c.y, c.x + nx * F, c.y + ny * F, RED, 8);
+    label('Force\non car', c.x + nx * (F + 14), c.y + ny * (F + 14), RED, 30, Math.sign(nx) || 1, 0, strength);
+    const side = nx < 0 ? 'right' : 'left';            // car pushes you toward the center → you feel it on the outside
+    const lx = c.x + outside * 70, ly = c.y + 95;
+    const box = label(`You feel the\ncar pushing on\nyour ${side} side.`, lx, ly, '#000', 26, outside, 1, strength);
+    g.save(); g.globalAlpha = strength; g.strokeStyle = RED; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(box.cx - outside * box.w * 0.15, box.cy - box.h / 2 - 6);
+    g.quadraticCurveTo(c.x + outside * 70, c.y + 40, c.x + outside * 30, c.y + 10); g.stroke();
+    g.restore();
+  }
+}
+
+// ---------- Loop & input ----------
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  step(dt); draw();
+  requestAnimationFrame(loop);
+}
+const PREV = null, NEXT = 'newton-frame-of-reference.html', LAST_BUILD = 3;
+const next = () => { if (build === LAST_BUILD && NEXT) location.href = NEXT; else enter(build + 1); };
+const back = () => { if (build === 0 && PREV) location.href = PREV + '#build=last'; else enter(build - 1); };
+// touch: swipe left = next, swipe right = back (tap = next via click)
+let tX0 = null, tY0 = null;
+addEventListener('touchstart', e => { tX0 = e.touches[0].clientX; tY0 = e.touches[0].clientY; }, {passive: true});
+addEventListener('touchend', e => {
+  if (tX0 == null) return;
+  const dx = e.changedTouches[0].clientX - tX0, dy = e.changedTouches[0].clientY - tY0; tX0 = null;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) { e.preventDefault(); (dx < 0 ? next : back)(); }
+});
+addEventListener('keydown', e => {
+  if (['ArrowRight', 'PageDown', 'ArrowDown', 'Enter', 'n'].includes(e.key)) { e.preventDefault(); next(); }
+  else if (['ArrowLeft', 'PageUp', 'ArrowUp', 'Backspace', 'p'].includes(e.key)) { e.preventDefault(); back(); }
+  else if (e.key === ' ') { e.preventDefault(); paused = !paused; }
+  else if (e.key === 'r' || e.key === 'R') enter(build);
+  showHint();
+});
+addEventListener('click', next);
+addEventListener('contextmenu', e => { e.preventDefault(); back(); });
+const hint = document.getElementById('hint'); let hintT;
+function showHint() { hint.style.opacity = 1; clearTimeout(hintT); hintT = setTimeout(() => hint.style.opacity = 0, 2500); }
+addEventListener('mousemove', showHint);
+addEventListener('resize', layout);
+
+// test hook: #build=2&t=3  (jump to a build and fast-forward t seconds)
+const h = new URLSearchParams(location.hash.slice(1));
+layout();
+if (h.get('build') === 'last') { enter(LAST_BUILD); for (let i = 0; i < 240 * 60 && running; i++) step(1 / 240); }
+else enter(+(h.get('build') || 0));
+if (h.has('t')) for (let i = 0; i < +h.get('t') * 240; i++) step(1 / 240);
+showHint();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
