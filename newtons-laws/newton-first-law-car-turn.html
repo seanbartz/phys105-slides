@@ -37,7 +37,7 @@
 (() => {
 const SW = 1024, SH = 768, LAST_BUILD = 4;
 const FONT = '"Helvetica Neue", Helvetica, Arial, sans-serif';
-const RED = '#e8312f', PINK = '#e6007e', YOU = '#0b7a75', GRAY = '#555';
+const RED = '#e8312f', CAR = '#d5dbe3', YOU = '#0b7a75', GRAY = '#555';
 
 // ---------- Road: vertical S-curve built from circular arcs, car drives bottom → top ----------
 // Arcs: LEFT α then RIGHT α (a big lane change), so your straight inertial path never meets the road again.
@@ -184,9 +184,9 @@ function drawCar(c) {
   g.fillStyle = '#222';
   for (const [x, y] of [[-W / 2 - 3, -L * 0.3], [W / 2 - 3, -L * 0.3], [-W / 2 - 3, L * 0.18], [W / 2 - 3, L * 0.18]])
     g.fillRect(x, y, 6, 14);
-  g.fillStyle = PINK; g.strokeStyle = '#8a004b'; g.lineWidth = 1.5;
+  g.fillStyle = CAR; g.strokeStyle = '#475569'; g.lineWidth = 1.5;
   g.beginPath(); g.roundRect(-W / 2, -L / 2, W, L, 11); g.fill(); g.stroke();
-  g.fillStyle = '#e6e6e6';
+  g.fillStyle = '#64748b';
   g.beginPath(); g.roundRect(-W / 2 + 6, -L / 2 + 12, W - 12, 9, 4); g.fill();   // windshield
   g.beginPath(); g.roundRect(-W / 2 + 7, L / 2 - 15, W - 14, 7, 3); g.fill();    // rear window
   g.fillStyle = '#fff59d';
