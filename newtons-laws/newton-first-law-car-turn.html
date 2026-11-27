@@ -10,6 +10,7 @@
     1  Car drives the curve with NO forces on you: you go straight, the car turns away
     2  Replay with the car holding you: stops at the first bend with the forces drawn
     3  Continue through the rest of the curve, forces shown live
+    4  Zoomed in, slippery seat, no seatbelt: you slide until you hit the door, then the door pushes you
   Space = pause/resume,  R = replay current build
 -->
 <style>
@@ -34,7 +35,7 @@
 
 <script>
 (() => {
-const SW = 1024, SH = 768;
+const SW = 1024, SH = 768, LAST_BUILD = 4;
 const FONT = '"Helvetica Neue", Helvetica, Arial, sans-serif';
 const RED = '#e8312f', PINK = '#e6007e', YOU = '#0b7a75', GRAY = '#555';
 
@@ -80,23 +81,46 @@ const S_START = sAtY(SH - 70);
 const S_APEX  = (ARC[0] + ARC[1]) / 2;                 // middle of the first LEFT turn (as in the original slide)
 const S_END   = sAtY(95);
 const V = 165;                                          // px per second
+const V_ZOOM = 60, Z = 4, PANEL = {x: 500, y: 190, w: 504, h: 560};   // build 4 (zoomed-in) settings
+const CAM_X = PANEL.x + PANEL.w / 2, CAM_Y = PANEL.y + PANEL.h / 2;
+const W_SLIDE = 9;                                      // how far you can slide sideways before hitting a door
 
 // ---------- State ----------
 let build = 0, s = S_START, running = false, paused = false, stopAt = S_END;
 let free = false, P = {x: 0, y: 0}, PV = {x: 0, y: 0}, P0 = null;
+let w = 0, wd = 0, contact = 0, Nper = 0;               // build 4: sideways slide; contact +1 left door, -1 right door
 
 function enter(b) {
-  build = Math.max(0, Math.min(3, b));
+  build = Math.max(0, Math.min(LAST_BUILD, b));
   paused = false;
   if (build === 0) { s = S_START; running = false; free = false; }
   if (build === 1) { s = S_START; free = true; running = true; stopAt = S_END;
                      const c = at(s); P = {x: c.x, y: c.y}; P0 = {...P}; PV = {x: V * c.tx, y: V * c.ty}; }
   if (build === 2) { s = S_START; free = false; running = true; stopAt = S_APEX; }
   if (build === 3) { s = S_APEX; free = false; running = true; stopAt = S_END; }
+  if (build === 4) { s = ARC[0] - 45; free = false; running = true; stopAt = ARC[2] + 70; w = wd = Nper = 0; contact = 0; }
+}
+function leftNormal(c) { return {x: c.ty, y: -c.tx}; }   // car's left, in screen coords (y down)
+// Slippery seat: sideways motion in the car's frame is  w'' = w*thd^2 - v*thd + N/m,
+// where thd is the car's turning rate (+ = left) and N is the door's push (only at a door, only pushing inward).
+function slide(dt) {
+  const c = at(s), nL = leftNormal(c), kL = c.kx * nL.x + c.ky * nL.y, thd = V_ZOOM * kL;
+  if (contact !== 0) {
+    const need = V_ZOOM * thd - w * thd * thd;            // push needed to keep you against the door
+    if (need * -contact > 0) { Nper = need; wd = 0; } else contact = 0;
+  }
+  if (contact === 0) {
+    Nper = 0;
+    wd += (w * thd * thd - V_ZOOM * thd) * dt; w += wd * dt;
+    if (w <= -W_SLIDE) { w = -W_SLIDE; wd = 0; contact = -1; }
+    if (w >=  W_SLIDE) { w =  W_SLIDE; wd = 0; contact = +1; }
+  }
 }
 function step(dt) {
   if (!running || paused) return;
-  s = Math.min(stopAt, s + V * dt);
+  if (build === 4) {
+    for (let i = 0; i < 4; i++) { s = Math.min(stopAt, s + V_ZOOM * dt / 4); slide(dt / 4); }
+  } else s = Math.min(stopAt, s + V * dt);
   if (free) { P.x += PV.x * dt; P.y += PV.y * dt; if (P.y < 70) running = false; }
   if (s >= stopAt) running = false;
 }
@@ -228,34 +252,53 @@ function draw() {
     return;
   }
 
-  // builds 2 & 3: the car holds you; show the forces
+  if (build === 4) { drawZoom(); return; }
+
+  // builds 2 & 3: the seatbelt holds you, pushing you toward the center of the turn
   const k = Math.hypot(c.kx, c.ky), nx = c.kx / (k || 1), ny = c.ky / (k || 1);
-  const strength = Math.min(1, k * R_TURN * 1.25);              // fades in/out with how sharp the turn is
-  const outside = nx < 0 ? 1 : -1;                      // screen side away from the center of the turn
-
-  // your inertial path: straight ahead along the car's current velocity
-  const fx = c.x + c.tx * 34, fy = c.y + c.ty * 34;
-  if (strength > 0.05) {                                // only while turning (on a straight road it IS the road)
-    pathLine(fx, fy, fx + c.tx * 160, fy + c.ty * 160, strength);
-    const ex = fx + c.tx * 160, ey = fy + c.ty * 160;
-    if (outside > 0) label('Your\ninertial path', ex + 18, ey + 10, GRAY, 28, 1, 0, strength);
-    else label('Your\ninertial path', Math.max(ex, 575), ey - 12, GRAY, 28, 0, -1, strength);   // above, clear of the bullet
-  }
-
+  const strength = Math.min(1, k * R_TURN * 1.25);      // fades in/out with how sharp the turn is
   drawCar(c);
   drawYou(c.x, c.y + 4);
-
   if (strength > 0.05) {
     const F = Math.min(150, V * V * k * 0.5);
-    arrow(c.x, c.y, c.x + nx * F, c.y + ny * F, RED, 8);
-    label('Force\non car', c.x + nx * (F + 14), c.y + ny * (F + 14), RED, 30, Math.sign(nx) || 1, 0, strength);
-    const side = nx < 0 ? 'right' : 'left';            // car pushes you toward the center → you feel it on the outside
-    const lx = c.x + outside * 70, ly = c.y + 95;
-    const box = label(`You feel the\ncar pushing on\nyour ${side} side.`, lx, ly, '#000', 26, outside, 1, strength);
-    g.save(); g.globalAlpha = strength; g.strokeStyle = RED; g.lineWidth = 2;
-    g.beginPath(); g.moveTo(box.cx - outside * box.w * 0.15, box.cy - box.h / 2 - 6);
-    g.quadraticCurveTo(c.x + outside * 70, c.y + 40, c.x + outside * 30, c.y + 10); g.stroke();
+    arrow(c.x, c.y + 4, c.x + nx * F, c.y + 4 + ny * F, RED, 7);
+    label('Force from\nseatbelt', c.x + nx * (F + 14), c.y + 4 + ny * (F + 14), RED, 30, Math.sign(nx) || 1, 0, strength);
+  }
+}
+
+// build 4: camera follows the car, zoomed in, clipped to the right side of the slide
+function drawZoom() {
+  const c = at(s), nL = leftNormal(c);
+  g.save();
+  g.clearRect(0, 0, SW, SH);                            // zoomed view replaces the whole road picture
+  g.beginPath(); g.roundRect(PANEL.x, PANEL.y, PANEL.w, PANEL.h, 14); g.clip();
+  g.fillStyle = '#dfe5dc'; g.fillRect(PANEL.x, PANEL.y, PANEL.w, PANEL.h);   // roadside
+  g.translate(CAM_X, CAM_Y); g.scale(Z, Z); g.translate(-c.x, -c.y);
+  roadPath(); g.strokeStyle = '#000'; g.lineWidth = ROAD_W; g.lineJoin = 'round'; g.stroke();
+  g.save(); roadPath(); g.strokeStyle = '#f5c400'; g.lineWidth = 2; g.setLineDash([8, 7]); g.stroke(); g.restore();
+  drawCar(c);
+  if (contact !== 0) {                                  // the door you're pressed against
+    const ang = Math.atan2(c.ty, c.tx) + Math.PI / 2;
+    g.save(); g.translate(c.x, c.y); g.rotate(ang);
+    g.strokeStyle = RED; g.lineWidth = 3; g.lineCap = 'round';
+    const x = contact < 0 ? 18 : -18;                   // right door is local +x
+    g.beginPath(); g.moveTo(x, -16); g.lineTo(x, 14); g.stroke();
     g.restore();
+  }
+  const px = c.x + w * nL.x, py = c.y + w * nL.y;
+  g.fillStyle = YOU; g.strokeStyle = '#fff'; g.lineWidth = 1.2;
+  g.beginPath(); g.arc(px, py, 6, 0, 2 * Math.PI); g.fill(); g.stroke();
+  g.restore();
+  g.save(); g.strokeStyle = '#888'; g.lineWidth = 2;
+  g.beginPath(); g.roundRect(PANEL.x, PANEL.y, PANEL.w, PANEL.h, 14); g.stroke(); g.restore();
+  // labels and the force arrow, in slide coordinates
+  const sx = CAM_X + Z * (px - c.x), sy = CAM_Y + Z * (py - c.y);
+  label('You', sx, sy - 34, YOU, 30, 0, -1);
+  if (Math.abs(Nper) > 1) {
+    const dir = Math.sign(Nper), L = Math.min(150, Math.abs(Nper) * 4.5), r = 6 * Z;
+    const x0 = sx + dir * nL.x * r, y0 = sy + dir * nL.y * r;
+    arrow(x0, y0, x0 + dir * nL.x * L, y0 + dir * nL.y * L, RED, 8);
+    label('Force\nfrom door', x0 + dir * nL.x * (L + 14), y0 + dir * nL.y * (L + 14), RED, 30, Math.sign(dir * nL.x) || 1, 0);
   }
 }
 
@@ -266,7 +309,7 @@ function loop(now) {
   step(dt); draw();
   requestAnimationFrame(loop);
 }
-const PREV = null, NEXT = 'newton-frame-of-reference.html', LAST_BUILD = 3;
+const PREV = null, NEXT = 'newton-frame-of-reference.html';
 const next = () => { if (build === LAST_BUILD && NEXT) location.href = NEXT; else enter(build + 1); };
 const back = () => { if (build === 0 && PREV) location.href = PREV + '#build=last'; else enter(build - 1); };
 // touch: swipe left = next, swipe right = back (tap = next via click)
